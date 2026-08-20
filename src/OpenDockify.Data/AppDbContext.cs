@@ -15,12 +15,16 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     public DbSet<OpenDockify.SystemConfig.Models.Setting> Settings => Set<OpenDockify.SystemConfig.Models.Setting>();
 
+    public DbSet<OpenDockify.Templates.Models.Template> Templates => Set<OpenDockify.Templates.Models.Template>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // One line per module assembly (see class doc). Added by user-auth.
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(OpenDockify.Auth.Models.User).Assembly);
         // Added by system-config.
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(OpenDockify.SystemConfig.Models.Setting).Assembly);
+        // Added by template-engine.
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(OpenDockify.Templates.Models.Template).Assembly);
         base.OnModelCreating(modelBuilder);
     }
 }
