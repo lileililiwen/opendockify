@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
+using OpenDockify.Finance.Services;
 using OpenDockify.Templates.Models;
 
 namespace OpenDockify.Templates.Services;
@@ -126,13 +127,13 @@ public static class TemplateRenderer
                     return (null, $"Value '{rawValue}' for field '{field.Name}' is not a valid currency amount.");
                 }
 
-                var conversion = RmbAmountConverter.Convert(amount);
-                if (conversion.Text is null)
+                var conversion = AmountToChinese.Convert(amount);
+                if (!conversion.Succeeded)
                 {
                     return (null, $"Field '{field.Name}': {conversion.Error}");
                 }
 
-                return (conversion.Text, null);
+                return (conversion.Value, null);
 
             case FieldType.Date:
                 if (!DateOnly.TryParse(rawValue, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))

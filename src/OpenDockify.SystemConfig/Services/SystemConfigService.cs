@@ -51,6 +51,7 @@ public sealed record SettingView(string Key, string? Value, string Source, bool 
 /// precedence stay behind one interface.
 /// </summary>
 public sealed class SystemConfigService(DbContext db, IConfigurationStore store, SettingCache cache)
+    : ISystemConfigReader
 {
     private static readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
 

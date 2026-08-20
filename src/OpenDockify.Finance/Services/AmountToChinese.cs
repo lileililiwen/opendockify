@@ -1,39 +1,25 @@
 using System.Text;
 
-namespace OpenDockify.Templates.Services;
-
-public sealed record RmbConversion(string? Text, string? Error)
-{
-    public static RmbConversion Success(string text)
-    {
-        return new(text, null);
-    }
-
-    public static RmbConversion Failure(string error)
-    {
-        return new(null, error);
-    }
-}
+namespace OpenDockify.Finance.Services;
 
 /// <summary>
-/// Converts a monetary amount (yuan) to Chinese uppercase (中文大写).
-///
-/// NOTE: this is a temporary in-module implementation so the renderer can
-/// satisfy the template-engine spec today. The canonical
-/// <c>OpenDockify.Finance.AmountToChinese</c> lands with the
-/// <c>finance-conversion</c> change, which will move this logic (and its unit
-/// tests) there; the renderer will then delegate to Finance.
+/// Converts a monetary amount (in yuan) to Chinese uppercase (中文大写) per
+/// standard financial convention: <c>元</c> for the integer part, <c>角</c>/
+/// <c>分</c> for decimals, and <c>整</c> when there is no fractional part.
+/// Rounds to 2 decimal places (<see cref="MidpointRounding.AwayFromZero"/>, the
+/// convention used on Chinese banking forms) and suppresses zero runs in the
+/// integer part (e.g. <c>1001</c> → <c>壹仟零壹元整</c>).
 /// </summary>
-public static class RmbAmountConverter
+public static class AmountToChinese
 {
     private const string _digits = "零壹贰叁肆伍陆柒捌玖";
     private static readonly string[] _units = { "", "拾", "佰", "仟" };
 
-    public static RmbConversion Convert(decimal amount)
+    public static Result<string> Convert(decimal amount)
     {
         if (amount < 0)
         {
-            return RmbConversion.Failure("Amount must not be negative.");
+            return Result.Failure<string>("Amount must not be negative.");
         }
 
         var cents = Math.Round(amount * 100, 0, MidpointRounding.AwayFromZero);
@@ -42,7 +28,7 @@ public static class RmbAmountConverter
 
         if (yuan == 0 && fen == 0)
         {
-            return RmbConversion.Success("零元整");
+            return Result.Success("零元整");
         }
 
         var jiao = fen / 10;
@@ -69,7 +55,7 @@ public static class RmbAmountConverter
             sb.Append('整');
         }
 
-        return RmbConversion.Success(sb.ToString());
+        return Result.Success(sb.ToString());
     }
 
     /// <summary>Converts the whole-yuan part (0..long) with 亿/万 groups.</summary>

@@ -4,6 +4,7 @@ using Microsoft.IdentityModel.Tokens;
 using OpenDockify.Api;
 using OpenDockify.Auth;
 using OpenDockify.Data;
+using OpenDockify.Finance;
 using OpenDockify.SystemConfig;
 using OpenDockify.Templates;
 
@@ -19,6 +20,7 @@ builder.Services.AddSystemConfigModule();
 builder.Services.AddSeed<SettingsSeeder>();
 builder.Services.AddTemplatesModule();
 builder.Services.AddSeed<TemplateSeeder>();
+builder.Services.AddFinanceModule();
 
 // JWT bearer auth: validate issuer/audience/lifetime and the HMAC signature
 // using Jwt:Secret. Startup validation of the secret lives in

@@ -4,36 +4,6 @@ using Xunit;
 
 namespace OpenDockify.UnitTests;
 
-public sealed class RmbAmountConverterTests
-{
-    [Theory]
-    [InlineData(0, "零元整")]
-    [InlineData(1234, "壹仟贰佰叁拾肆元整")]
-    [InlineData(1234.5, "壹仟贰佰叁拾肆元伍角")]
-    [InlineData(1234.56, "壹仟贰佰叁拾肆元伍角陆分")]
-    [InlineData(0.05, "伍分")]
-    [InlineData(0.5, "伍角")]
-    [InlineData(1001, "壹仟零壹元整")]
-    [InlineData(1000001, "壹佰万零壹元整")]
-    [InlineData(1.999, "贰元整")]
-    public void Convert_returns_expected_uppercase(decimal amount, string expected)
-    {
-        var result = RmbAmountConverter.Convert(amount);
-
-        Assert.True(result.Text is not null, result.Error);
-        Assert.Equal(expected, result.Text);
-    }
-
-    [Fact]
-    public void Convert_rejects_negative_amounts()
-    {
-        var result = RmbAmountConverter.Convert(-100);
-
-        Assert.Null(result.Text);
-        Assert.Contains("negative", result.Error);
-    }
-}
-
 public sealed class TemplateDefinitionValidatorTests
 {
     private const string _validDefinition = """
