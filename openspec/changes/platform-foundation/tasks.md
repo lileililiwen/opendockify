@@ -69,5 +69,8 @@
   Server switch verified via registry unit coverage (no local instances).
 - [x] 5.5 Unknown provider (`Database:Provider=oracle`) → startup fails with a
   clear error listing the four supported names
-- [ ] 5.6 `docker build` succeeds; `docker run` container has
-  `fonts-noto-cjk` installed and `/healthz` responds
+- [ ] 5.6 (OPTIONAL, deferred) `docker build` succeeds; `docker run` container
+  has `fonts-noto-cjk` installed and `/healthz` responds. Docker is an optional
+  deployment path, not a build dependency — the image must be verified by the
+  deployer on a host with a working Docker network. The Dockerfile ships with
+  the repo.
