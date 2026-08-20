@@ -4,6 +4,7 @@ using Microsoft.IdentityModel.Tokens;
 using OpenDockify.Api;
 using OpenDockify.Auth;
 using OpenDockify.Data;
+using OpenDockify.SystemConfig;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,6 +14,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDatabaseModule(builder.Configuration);
 builder.Services.AddAuthModule();
 builder.Services.AddSeed<AdminSeeder>();
+builder.Services.AddSystemConfigModule();
+builder.Services.AddSeed<SettingsSeeder>();
 
 // JWT bearer auth: validate issuer/audience/lifetime and the HMAC signature
 // using Jwt:Secret. Startup validation of the secret lives in
@@ -50,6 +53,7 @@ app.UseAuthorization();
 
 app.MapAuthEndpoints();
 app.MapAdminEndpoints();
+app.MapSystemConfigEndpoints();
 
 // Self-hosters should not need to run `dotnet ef` manually: apply migrations
 // and run idempotent seeders at startup.

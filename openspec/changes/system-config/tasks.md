@@ -1,36 +1,36 @@
 ## 1. SystemConfig Module
 
-- [ ] 1.1 Create `src/OpenDockify.SystemConfig`; add `Models/Setting.cs`
+- [x] 1.1 Create `src/OpenDockify.SystemConfig`; add `Models/Setting.cs`
   (Id, Key unique, ValueJson), `Configuration/SettingConfiguration.cs`
-- [ ] 1.2 Add `SettingKeys` — allowlist with key names, value types, defaults,
+- [x] 1.2 Add `SettingKeys` — allowlist with key names, value types, defaults,
   env mappings (`AI_ENDPOINT`, `AI_API_KEY`, `AI_MODEL`, `LPR_ONE_YEAR_RATE`,
   `AI_ENABLED`), and per-key validation rules
-- [ ] 1.3 Implement `SystemConfigService` — typed `GetAsync<T>`,
+- [x] 1.3 Implement `SystemConfigService` — typed `GetAsync<T>`,
   `SetAsync(key, value)`, cache with invalidation on write
-- [ ] 1.4 Implement `IConfigurationStore` — merge precedence:
+- [x] 1.4 Implement `IConfigurationStore` — merge precedence:
   environment variable > DB value > default
-- [ ] 1.5 Add `MaskSecret` + log redaction guard for `Ai.ApiKey` patterns
-- [ ] 1.6 `SystemConfigModuleExtensions.cs`; wire into `OpenDockify.Api`
+- [x] 1.5 Add `MaskSecret` + log redaction guard for `Ai.ApiKey` patterns
+- [x] 1.6 `SystemConfigModuleExtensions.cs`; wire into `OpenDockify.Api`
 
 ## 2. Data + Migration
 
-- [ ] 2.1 Register `Setting` DbSet + configuration in `OpenDockify.Data`
-- [ ] 2.2 Extend seeder: when DB empty, insert `Ai.Enabled=false` and default
+- [x] 2.1 Register `Setting` DbSet + configuration in `OpenDockify.Data`
+- [x] 2.2 Extend seeder: when DB empty, insert `Ai.Enabled=false` and default
   `Lpr.OneYearRate` (from config/env)
-- [ ] 2.3 `dotnet ef migrations add AddSettings` and apply
+- [x] 2.3 `dotnet ef migrations add AddSettings` and apply
 
 ## 3. Admin API
 
-- [ ] 3.1 Add `GET /api/admin/settings` (RequireAdmin) — all allowlisted keys,
+- [x] 3.1 Add `GET /api/admin/settings` (RequireAdmin) — all allowlisted keys,
   secrets masked
-- [ ] 3.2 Add `PUT /api/admin/settings/{key}` (RequireAdmin) — allowlist
+- [x] 3.2 Add `PUT /api/admin/settings/{key}` (RequireAdmin) — allowlist
   check (unknown → 400), type/range validation, persist, invalidate cache
-- [ ] 3.3 `PUT` of `Ai.ApiKey` accepts new value but reads always masked
+- [x] 3.3 `PUT` of `Ai.ApiKey` accepts new value but reads always masked
 
 ## 4. Build & Verify
 
-- [ ] 4.1 `dotnet build OpenDockify.sln` → 0 warnings / 0 errors
-- [ ] 4.2 HTTP smoke tests:
+- [x] 4.1 `dotnet build OpenDockify.sln` → 0 warnings / 0 errors
+- [x] 4.2 HTTP smoke tests:
   - Admin GET settings → all keys, `Ai.ApiKey` masked
   - PUT known key → 200, persisted, subsequent GET reflects change
   - PUT unknown key → 400
