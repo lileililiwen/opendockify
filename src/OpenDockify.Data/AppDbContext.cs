@@ -11,4 +11,12 @@ namespace OpenDockify.Data;
 /// </summary>
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
+    public DbSet<OpenDockify.Auth.Models.User> Users => Set<OpenDockify.Auth.Models.User>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        // One line per module assembly (see class doc). Added by user-auth.
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(OpenDockify.Auth.Models.User).Assembly);
+        base.OnModelCreating(modelBuilder);
+    }
 }

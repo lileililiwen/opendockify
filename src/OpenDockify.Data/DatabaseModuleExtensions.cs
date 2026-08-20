@@ -30,6 +30,10 @@ public static class DatabaseModuleExtensions
         services.AddDbContext<AppDbContext>(builder =>
             DatabaseProviderRegistry.Configure(builder, provider, connectionString, mySqlVersion));
 
+        // Module services depend on the base DbContext (never OpenDockify.Data)
+        // per Agents.md §2; resolve it to the AppDbContext instance.
+        services.AddScoped<DbContext>(sp => sp.GetRequiredService<AppDbContext>());
+
         services.AddSingleton<ISeedRegistry, SeedRegistry>();
 
         return services;

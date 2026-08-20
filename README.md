@@ -99,6 +99,21 @@ any of the four providers.
 - Migrations are shared; `dotnet ef migrations add` writes provider-agnostic
   migrations, and each provider applies them on startup.
 
+## Security notes
+
+- **JWT secret** — the signing secret `Jwt:Secret` MUST be at least 32 bytes
+  long and MUST be overridden in production (the value in
+  `appsettings.Development.json` is a local-development placeholder). Startup
+  fails with a clear error if it is missing or too short.
+- **Login rate limiting** — registration is open and login attempts are
+  currently unthrottled. Self-hosters SHOULD rate-limit `/api/auth/login`
+  (and register) to slow credential stuffing, either with ASP.NET Core's
+  built-in Rate Limiting middleware or at the reverse proxy (e.g. nginx
+  `limit_req`). This is the deployer's responsibility for the MVP.
+- **Default admin** — the seeder creates `admin` / `admin123` when the
+  database is empty. Override both via `Seed:AdminUsername` /
+  `Seed:AdminPassword` (or their env forms) before any real deployment.
+
 ## Development
 
 ```bash
