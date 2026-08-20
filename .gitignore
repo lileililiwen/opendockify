@@ -1,0 +1,33 @@
+## .NET build output
+bin/
+obj/
+*.user
+
+## Visual Studio / Rider
+.vs/
+.idea/
+*.suo
+*.userosscache
+*.sln.docstates
+*.sln.iml
+
+## Environment / secrets
+appsettings.Production.json
+.env
+*.pfx
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Logs
+*.log
+logs/
+
+## Test coverage output
+TestResults/
+
+## Runtime data (SQLite default DB + generated PDF documents)
+opendockify.db
+/data/
+src/OpenDockify.Api/data/

@@ -1,0 +1,38 @@
+schema: spec-driven
+
+# Project context — shown to AI when creating artifacts.
+context: |
+  OpenDockify: an open-source, MIT-licensed, SELF-HOSTED document/contract drafting
+  system (no SaaS, no cloud services, no data collection). Users deploy it themselves
+  via Docker.
+
+  Backend: C# / .NET 8 (LTS) Minimal APIs + EF Core. Database: SQLite by default
+  (no external DB server needed); pluggable provider registry supports PostgreSQL,
+  MySQL/MariaDB, and SQL Server selected via `Database:Provider` +
+  `ConnectionStrings:Default` (env-overridable, no recompile to switch). PDF generation: QuestPDF
+  (MIT) as primary; iText7 (AGPL!) ONLY for overlaying on existing PDFs (e.g.
+  cross-page seals/stamps) — AGPL license risk MUST be documented in code comments;
+  iText dependency can be removed if unused.
+  Frontend: React SPA, decoupled from the backend (own repo/tooling).
+  Auth: simple username/password + JWT, roles Regular User + Administrator,
+  multi-user isolation (users see only their own templates/documents).
+  AI assist: optional toggle in system config; NO hardcoded API keys — deployer
+  provides OpenAI/Ollama endpoint + key via DB config (env-overridable).
+  E-signature: NOT implemented in MVP — only reserved entities (signing status
+  field, signers, audit log) + interface skeletons; CA/timestamping is the
+  deployer's responsibility.
+  Key pitfalls to respect in specs/code: QuestPDF needs embedded Chinese fonts
+  (Docker must pre-install); custom RMB-uppercase amount conversion (edge cases:
+  zero, decimals); JSON template parsing validation (prevent malicious JSON
+  injection); XSS sanitization on frontend AND backend (dual validation).
+
+# Per-artifact rules (optional)
+rules:
+  proposal:
+    - Keep proposals focused on WHY and WHAT, not HOW
+    - Always include a "Non-goals" section
+  design:
+    - Always document licensing reminders (iText7 AGPL, QuestPDF MIT)
+    - Always include a "Risks / Trade-offs" section
+  tasks:
+    - Break tasks into chunks of max 2 hours
