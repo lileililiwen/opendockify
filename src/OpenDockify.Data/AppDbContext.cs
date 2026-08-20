@@ -19,6 +19,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     public DbSet<OpenDockify.Generation.Models.Document> Documents => Set<OpenDockify.Generation.Models.Document>();
 
+    public DbSet<OpenDockify.AiAssist.Models.AiUsageLog> AiUsageLogs => Set<OpenDockify.AiAssist.Models.AiUsageLog>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // One line per module assembly (see class doc). Added by user-auth.
@@ -29,6 +31,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(OpenDockify.Templates.Models.Template).Assembly);
         // Added by document-generation.
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(OpenDockify.Generation.Models.Document).Assembly);
+        // Added by ai-assist.
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(OpenDockify.AiAssist.Models.AiUsageLog).Assembly);
         base.OnModelCreating(modelBuilder);
     }
 }

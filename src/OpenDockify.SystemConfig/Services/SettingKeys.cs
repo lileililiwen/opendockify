@@ -38,6 +38,8 @@ public static class SettingKeys
     public const string AiEndpoint = "Ai.Endpoint";
     public const string AiApiKey = "Ai.ApiKey";
     public const string AiModel = "Ai.Model";
+    public const string AiTimeoutSeconds = "Ai.TimeoutSeconds";
+    public const string AiRateLimitPerDay = "Ai.RateLimitPerDay";
     public const string LprOneYearRate = "Lpr.OneYearRate";
     public const string LprReferenceDate = "Lpr.ReferenceDate";
 
@@ -47,6 +49,8 @@ public static class SettingKeys
         new(AiEndpoint, SettingValueType.Url, "\"\"", "AI_ENDPOINT"),
         new(AiApiKey, SettingValueType.Secret, "\"\"", "AI_API_KEY", IsSecret: true),
         new(AiModel, SettingValueType.Text, "\"\"", "AI_MODEL"),
+        new(AiTimeoutSeconds, SettingValueType.Number, "30", "AI_TIMEOUT_SECONDS"),
+        new(AiRateLimitPerDay, SettingValueType.Number, "0", "AI_RATE_LIMIT_PER_DAY"),
         new(LprOneYearRate, SettingValueType.Number, "3.45", "LPR_ONE_YEAR_RATE"),
         new(LprReferenceDate, SettingValueType.Date, null, "LPR_REFERENCE_DATE"),
     };

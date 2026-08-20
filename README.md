@@ -99,6 +99,40 @@ any of the four providers.
 - Migrations are shared; `dotnet ef migrations add` writes provider-agnostic
   migrations, and each provider applies them on startup.
 
+## AI assist (optional)
+
+The AI polish endpoints (`/api/ai/polish-clause`, `/api/ai/polish-document`)
+are **disabled by default** (`Ai.Enabled=false`). They can polish a user-drafted
+clause or the rendered document prose while mechanically preserving every
+mandatory field value (placeholders are re-substituted server-side; fabricated
+amounts/IDs are stripped by the guard).
+
+### Privacy warning
+
+AI polish is **best-effort and never legally binding**. Before enabling it:
+
+- **Do not transmit ID numbers, names, or other personal data to public LLM
+  endpoints.** The system redacts stored logs, but the text you submit is sent
+  to whatever endpoint you configure.
+- **Prefer a local Ollama server for private deployments** so no data leaves
+  your host. Any OpenAI-compatible chat-completions endpoint works.
+
+### Configuration (system settings, admin API)
+
+| Setting | Meaning |
+|---|---|
+| `Ai.Enabled` | `true`/`false`; master gate for all AI endpoints |
+| `Ai.Endpoint` | base URL, e.g. `https://api.openai.com/v1` or `http://localhost:11434/v1` (Ollama) |
+| `Ai.ApiKey` | Bearer key (secret, never logged). Empty works for local Ollama |
+| `Ai.Model` | model name, e.g. `gpt-4o-mini` or `llama3` |
+| `Ai.TimeoutSeconds` | request timeout (default 30) |
+| `Ai.RateLimitPerDay` | optional per-user daily cap (`0` = off) |
+
+Each can also be set via its environment variable (`AI_ENABLED`,
+`AI_ENDPOINT`, `AI_API_KEY`, `AI_MODEL`, `AI_TIMEOUT_SECONDS`,
+`AI_RATE_LIMIT_PER_DAY`). To disable AI again, set `Ai.Enabled=false`; every
+AI endpoint then returns `403` and never makes an external call.
+
 ## Security notes
 
 - **JWT secret** — the signing secret `Jwt:Secret` MUST be at least 32 bytes

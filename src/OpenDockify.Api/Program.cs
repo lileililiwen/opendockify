@@ -1,6 +1,7 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using OpenDockify.AiAssist;
 using OpenDockify.Api;
 using OpenDockify.Auth;
 using OpenDockify.Data;
@@ -25,6 +26,7 @@ builder.Services.AddSeed<TemplateSeeder>();
 builder.Services.AddFinanceModule();
 builder.Services.AddRenderingModule();
 builder.Services.AddGenerationModule();
+builder.Services.AddAiAssistModule();
 
 // JWT bearer auth: validate issuer/audience/lifetime and the HMAC signature
 // using Jwt:Secret. Startup validation of the secret lives in
@@ -66,6 +68,8 @@ app.MapSystemConfigEndpoints();
 app.MapTemplateEndpoints();
 app.MapAdminTemplateEndpoints();
 app.MapDocumentEndpoints();
+app.MapAiAssistEndpoints();
+app.MapAdminAiUsageEndpoints();
 
 // Self-hosters should not need to run `dotnet ef` manually: apply migrations
 // and run idempotent seeders at startup.
