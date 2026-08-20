@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\OpenDockify.Templates\OpenDockify.Templates.csproj" />
+    <ProjectReference Include="..\OpenDockify.Finance\OpenDockify.Finance.csproj" />
+    <ProjectReference Include="..\OpenDockify.Rendering\OpenDockify.Rendering.csproj" />
+    <ProjectReference Include="..\OpenDockify.SystemConfig\OpenDockify.SystemConfig.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

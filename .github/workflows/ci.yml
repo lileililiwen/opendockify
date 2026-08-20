@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    env:
+      # SonarCloud integration is optional: the Sonar steps only run when
+      # SONAR_TOKEN is configured as a repository secret. Until then CI is
+      # the format/build/test gate on its own.
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full history so diff-based tooling (Sonar, coverage) can work later.
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Install SonarScanner for .NET
+        if: env.SONAR_TOKEN != ''
+        run: dotnet tool install --global dotnet-sonarscanner
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: NuGet audit
+        id: audit
+        # Restore-time audit (NuGetAuditMode=all, level=high) already fails the
+        # build on high/critical advisories; this step is the readable report
+        # and a belt-and-suspenders gate for direct and transitive packages.
+        run: |
+          dotnet list OpenDockify.sln package --vulnerable --include-transitive
+          if dotnet list OpenDockify.sln package --vulnerable --include-transitive | grep -qE '^\s*>\s+\S+\s+[0-9].*\s(High|Critical)\s'; then
+            echo "::error::Known high/critical NuGet vulnerabilities found. Upgrade the package or add an accepted advisory to NuGetAuditSuppress with a reviewed rationale (see CONTRIBUTING.md)."
+            exit 1
+          fi
+
+      - name: Format verify
+        # Fails on any drift from the .editorconfig (deterministic formatting).
+        run: dotnet format OpenDockify.sln --verify-no-changes --no-restore
+
+      - name: Sonar Begin
+        if: env.SONAR_TOKEN != ''
+        env:
+          SONAR_ORG: ${{ secrets.SONAR_ORG }}
+          SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        run: dotnet sonarscanner begin
+          /k:"$SONAR_PROJECT_KEY"
+          /o:"$SONAR_ORG"
+          /d:sonar.host.url="$SONAR_HOST_URL"
+          /d:sonar.token="$SONAR_TOKEN"
+          /d:sonar.qualitygate.wait=true
+          /d:sonar.cs.opencover.reportsPaths="TestResults/**/coverage.opencover.xml"
+          /d:sonar.coverage.exclusions="**/Migrations/**,**/*.Designer.cs,**/obj/**"
+
+      - name: Build
+        id: build
+        run: dotnet build OpenDockify.sln -c Release --no-restore /warnaserror -bl:build.binlog
+
+      - name: Test (with OpenCover coverage for Sonar)
+        run: dotnet test OpenDockify.sln -c Release --no-build --collect:"XPlat Code Coverage" --settings Coverlet.runsettings --results-directory TestResults
+
+      - name: Incremental coverage gate
+        # Fails when the executable lines added by this PR fall below 80%
+        # coverage (test projects, EF migrations, and generated code excluded).
+        # Only evaluated on pull requests, where the base ref exists.
+        if: github.event_name == 'pull_request'
+        run: python3 scripts/check_incremental_coverage.py --base origin/main --threshold 0.80 --reports 'TestResults/**/coverage.opencover.xml'
+
+      - name: Upload coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports
+          path: TestResults/**/coverage.opencover.xml
+          if-no-files-found: ignore
+
+      - name: Sonar End
+        if: env.SONAR_TOKEN != ''
+        # sonar.qualitygate.wait=true makes this fail the pipeline when the
+        # new-code quality gate is red (bugs/vulnerabilities/smells/duplication/coverage).
+        run: dotnet sonarscanner end /d:sonar.token="$SONAR_TOKEN"
+
+      - name: Upload build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            build.binlog
+            **/TestResults/
+          if-no-files-found: ignore

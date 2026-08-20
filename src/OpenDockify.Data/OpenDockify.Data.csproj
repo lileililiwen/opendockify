@@ -1,0 +1,31 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\OpenDockify.Auth\OpenDockify.Auth.csproj" />
+    <ProjectReference Include="..\OpenDockify.Templates\OpenDockify.Templates.csproj" />
+    <ProjectReference Include="..\OpenDockify.Generation\OpenDockify.Generation.csproj" />
+    <ProjectReference Include="..\OpenDockify.Rendering\OpenDockify.Rendering.csproj" />
+    <ProjectReference Include="..\OpenDockify.Finance\OpenDockify.Finance.csproj" />
+    <ProjectReference Include="..\OpenDockify.AiAssist\OpenDockify.AiAssist.csproj" />
+    <ProjectReference Include="..\OpenDockify.Esign\OpenDockify.Esign.csproj" />
+    <ProjectReference Include="..\OpenDockify.SystemConfig\OpenDockify.SystemConfig.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.*">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.*" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.*" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.*" />
+    <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="8.0.*" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

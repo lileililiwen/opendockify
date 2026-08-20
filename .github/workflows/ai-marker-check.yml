@@ -1,0 +1,44 @@
+name: AI marker check
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+# Opt-in, non-blocking: this workflow only posts a soft-warning comment when a
+# large diff carries no AI involvement marker. It never fails the pipeline.
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute diff size and markers
+        id: check
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          added=$(git diff --numstat "$BASE_SHA...$HEAD_SHA" | awk '{s += $1} END {print s + 0}')
+          commit_markers=$(git log --format=%B "$BASE_SHA..$HEAD_SHA" | grep -ciE 'AI:[[:space:]]*(generated|assisted|none)' || true)
+          body_markers=$(printf '%s' "$PR_BODY" | grep -ciE 'AI:[[:space:]]*(generated|assisted|none)' || true)
+          total_markers=$((commit_markers + body_markers))
+          echo "added=$added"
+          echo "markers=$total_markers"
+          echo "added=$added" >> "$GITHUB_OUTPUT"
+          echo "markers=$total_markers" >> "$GITHUB_OUTPUT"
+
+      - name: Post soft warning comment
+        if: steps.check.outputs.added > 500 && steps.check.outputs.markers == '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if ! gh pr view "$PR_NUMBER" --json comments --jq '.comments[].body' | grep -q "AI involvement marker"; then
+            gh pr comment "$PR_NUMBER" --body \
+              "Heads up: this PR adds a large diff (${{ steps.check.outputs.added }} lines) without an AI involvement marker. If AI generated or substantially assisted this code, add an \`AI: generated\` / \`AI: assisted\` marker to the PR description (see CONTRIBUTING.md) so it gets the AI review checklist. This is a soft warning and does not block the merge."
+          fi

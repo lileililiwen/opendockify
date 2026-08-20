@@ -29,5 +29,10 @@ TestResults/
 
 ## Runtime data (SQLite default DB + generated PDF documents)
 opendockify.db
+opendockify.db-shm
+opendockify.db-wal
 /data/
 src/OpenDockify.Api/data/
+
+## Husky hooks runtime state (installed on restore; git-ignored)
+.husky/_/

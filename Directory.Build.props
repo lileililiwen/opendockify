@@ -1,0 +1,42 @@
+<Project>
+
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <!-- Keep the allowlist as small as possible; each entry must be justified. -->
+    <WarningsNotAsErrors></WarningsNotAsErrors>
+    <!-- Make bin/obj outputs deterministic across machines. -->
+    <Deterministic>true</Deterministic>
+    <!-- NuGet vulnerability audit at restore time: direct + transitive, fail on
+         high/critical (see nuget-audit change). Accepted advisories go in
+         NuGetAuditSuppress with a reviewed rationale. -->
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <NuGetAuditLevel>high</NuGetAuditLevel>
+    <!-- Accepted advisories (empty until one is documented in CONTRIBUTING.md). -->
+    <NuGetAuditSuppress></NuGetAuditSuppress>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Roslyn analyzers that fail the build on violations (see design). -->
+    <PackageReference Include="SonarAnalyzer.CSharp" Version="10.32.0.713" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- Installs Husky.Net local git hooks on restore (git-hooks change). Runs once
+       per solution via the stamp file; hooks are a fast local pre-check, CI remains
+       the authoritative gate. HUSKY=0 disables. -->
+  <Target Name="Husky" AfterTargets="Restore" Condition="'$(HUSKY)' != 0"
+          Inputs="$(MSBuildThisFileDirectory).config/dotnet-tools.json"
+          Outputs="$(MSBuildThisFileDirectory).husky/_/install.stamp">
+    <Exec Command="dotnet tool restore" StandardOutputImportance="Low" StandardErrorImportance="High" WorkingDirectory="$(MSBuildThisFileDirectory)" />
+    <Exec Command="dotnet husky install" StandardOutputImportance="Low" StandardErrorImportance="High" WorkingDirectory="$(MSBuildThisFileDirectory)" />
+    <Touch Files="$(MSBuildThisFileDirectory).husky/_/install.stamp" AlwaysCreate="true" Condition="Exists('$(MSBuildThisFileDirectory).husky/_')" />
+    <ItemGroup>
+      <FileWrites Include="$(MSBuildThisFileDirectory).husky/_/install.stamp" />
+    </ItemGroup>
+  </Target>
+
+</Project>

@@ -1,0 +1,21 @@
+services:
+  opendockify:
+    build:
+      context: .
+    container_name: opendockify
+    ports:
+      - "8080:8080"
+    volumes:
+      - opendockify-data:/app/data
+    environment:
+      # SQLite is the default (no external DB). To switch providers, uncomment
+      # and set these (see README "Database providers"):
+      # Database__Provider: postgres
+      # ConnectionStrings__Default: "Host=db;Database=opendockify;Username=opendockify;Password=change-me"
+      # AI assist (optional): set Ai__Enabled, Ai__Endpoint, Ai__ApiKey, Ai__Model
+      #   (do NOT put real secrets in a committed compose file; use an .env file)
+      ASPNETCORE_URLS: http://+:8080
+    restart: unless-stopped
+
+volumes:
+  opendockify-data:
