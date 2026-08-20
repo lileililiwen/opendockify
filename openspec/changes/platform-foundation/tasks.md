@@ -63,9 +63,10 @@
   SQLite file created (default provider)
 - [x] 5.3 Restart against existing SQLite file → seed is a no-op (no errors,
   no duplicate rows)
-- [ ] 5.4 Provider switch smoke test (against local instances where available):
-  set `Database:Provider=postgres|mysql|sqlserver` with a valid
-  `ConnectionStrings:Default` → app starts, migrations apply, `/healthz` 200
+- [x] 5.4 Provider switch smoke test (PostgreSQL): set
+  `Database:Provider=postgres` with a valid `ConnectionStrings:Default` →
+  app starts, `__EFMigrationsHistory` created, `/healthz` 200. MySQL/SQL
+  Server switch verified via registry unit coverage (no local instances).
 - [x] 5.5 Unknown provider (`Database:Provider=oracle`) → startup fails with a
   clear error listing the four supported names
 - [ ] 5.6 `docker build` succeeds; `docker run` container has
