@@ -1,3 +1,5 @@
+using OpenDockify.Esign.Models;
+
 namespace OpenDockify.Generation.Models;
 
 public enum DocumentStatus
@@ -10,6 +12,9 @@ public enum DocumentStatus
 /// whose <see cref="ParentId"/> references the original. The snapshot stores
 /// the filled values + selected clause ids for re-edit and historical
 /// verification; the rendered text and PDF path are recorded separately.
+/// <see cref="SigningStatus"/> is reserved: it always stays
+/// <see cref="Esign.Models.SigningStatus.NotInitiated"/> in the MVP — no flow
+/// transitions it.
 /// </summary>
 public sealed class Document
 {
@@ -20,6 +25,9 @@ public sealed class Document
     public Guid TemplateId { get; set; }
 
     public DocumentStatus Status { get; set; } = DocumentStatus.Generated;
+
+    /// <summary>Reserved e-signature state; never changed by MVP flows.</summary>
+    public SigningStatus SigningStatus { get; set; } = SigningStatus.NotInitiated;
 
     /// <summary>JSON: filled values map + selected clause ids.</summary>
     public string SnapshotJson { get; set; } = string.Empty;

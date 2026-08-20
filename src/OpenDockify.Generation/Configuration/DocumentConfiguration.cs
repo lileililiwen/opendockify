@@ -22,6 +22,10 @@ public sealed class DocumentConfiguration : IEntityTypeConfiguration<Document>
             .HasConversion<int>()
             .IsRequired();
 
+        builder.Property(d => d.SigningStatus)
+            .HasConversion<int>()
+            .IsRequired();
+
         builder.Property(d => d.SnapshotJson)
             .IsRequired();
 

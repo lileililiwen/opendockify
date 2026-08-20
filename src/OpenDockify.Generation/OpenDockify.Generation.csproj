@@ -13,6 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\OpenDockify.Esign\OpenDockify.Esign.csproj" />
     <ProjectReference Include="..\OpenDockify.Templates\OpenDockify.Templates.csproj" />
     <ProjectReference Include="..\OpenDockify.Finance\OpenDockify.Finance.csproj" />
     <ProjectReference Include="..\OpenDockify.Rendering\OpenDockify.Rendering.csproj" />

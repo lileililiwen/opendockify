@@ -21,6 +21,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     public DbSet<OpenDockify.AiAssist.Models.AiUsageLog> AiUsageLogs => Set<OpenDockify.AiAssist.Models.AiUsageLog>();
 
+    public DbSet<OpenDockify.Esign.Models.Signer> Signers => Set<OpenDockify.Esign.Models.Signer>();
+
+    public DbSet<OpenDockify.Esign.Models.SigningAuditLog> SigningAuditLogs => Set<OpenDockify.Esign.Models.SigningAuditLog>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // One line per module assembly (see class doc). Added by user-auth.
@@ -33,6 +37,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(OpenDockify.Generation.Models.Document).Assembly);
         // Added by ai-assist.
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(OpenDockify.AiAssist.Models.AiUsageLog).Assembly);
+        // Added by esign-extensions.
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(OpenDockify.Esign.Models.Signer).Assembly);
         base.OnModelCreating(modelBuilder);
     }
 }

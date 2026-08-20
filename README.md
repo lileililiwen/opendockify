@@ -107,7 +107,7 @@ clause or the rendered document prose while mechanically preserving every
 mandatory field value (placeholders are re-substituted server-side; fabricated
 amounts/IDs are stripped by the guard).
 
-### Privacy warning
+### ⚠️ Privacy warning
 
 AI polish is **best-effort and never legally binding**. Before enabling it:
 
@@ -132,6 +132,19 @@ Each can also be set via its environment variable (`AI_ENABLED`,
 `AI_ENDPOINT`, `AI_API_KEY`, `AI_MODEL`, `AI_TIMEOUT_SECONDS`,
 `AI_RATE_LIMIT_PER_DAY`). To disable AI again, set `Ai.Enabled=false`; every
 AI endpoint then returns `403` and never makes an external call.
+
+## E-signature (reserved, not implemented)
+
+E-signature is **out of MVP scope**. The database schema reserves the seams
+(`Documents.SigningStatus`, `Signers`, `SigningAuditLogs`) and an
+`ISigningOrchestrator` interface skeleton exists, but **no signing behavior is
+implemented**: there are no signing endpoints, no certificates are issued, and
+no legally reliable timestamps are produced.
+
+For legally reliable signatures the **deployer must integrate an external CA
+and timestamping service** (certificate issuance, RFC 3161 timestamps). This
+project only orchestrates the workflow and never acts as a certificate
+authority.
 
 ## Security notes
 

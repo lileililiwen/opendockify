@@ -139,6 +139,7 @@ public static class DocumentEndpoints
             document.TemplateId,
             document.ParentId,
             document.Status,
+            document.SigningStatus,
             document.CreatedAt,
         };
     }
@@ -151,6 +152,7 @@ public static class DocumentEndpoints
             document.TemplateId,
             document.ParentId,
             document.Status,
+            document.SigningStatus,
             document.SnapshotJson,
             document.RenderedText,
             document.CreatedAt,

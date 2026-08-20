@@ -5,6 +5,7 @@ using OpenDockify.AiAssist;
 using OpenDockify.Api;
 using OpenDockify.Auth;
 using OpenDockify.Data;
+using OpenDockify.Esign;
 using OpenDockify.Finance;
 using OpenDockify.Generation;
 using OpenDockify.Rendering;
@@ -27,6 +28,7 @@ builder.Services.AddFinanceModule();
 builder.Services.AddRenderingModule();
 builder.Services.AddGenerationModule();
 builder.Services.AddAiAssistModule();
+builder.Services.AddEsignModule();
 
 // JWT bearer auth: validate issuer/audience/lifetime and the HMAC signature
 // using Jwt:Secret. Startup validation of the secret lives in
