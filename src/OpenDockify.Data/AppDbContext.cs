@@ -17,6 +17,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     public DbSet<OpenDockify.Templates.Models.Template> Templates => Set<OpenDockify.Templates.Models.Template>();
 
+    public DbSet<OpenDockify.Generation.Models.Document> Documents => Set<OpenDockify.Generation.Models.Document>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // One line per module assembly (see class doc). Added by user-auth.
@@ -25,6 +27,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(OpenDockify.SystemConfig.Models.Setting).Assembly);
         // Added by template-engine.
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(OpenDockify.Templates.Models.Template).Assembly);
+        // Added by document-generation.
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(OpenDockify.Generation.Models.Document).Assembly);
         base.OnModelCreating(modelBuilder);
     }
 }

@@ -10,6 +10,7 @@ public static class SystemConfigModuleExtensions
         services.AddSingleton<SettingCache>();
         services.AddScoped<IConfigurationStore, ConfigurationStore>();
         services.AddScoped<SystemConfigService>();
+        services.AddScoped<ISystemConfigReader>(sp => sp.GetRequiredService<SystemConfigService>());
         return services;
     }
 }

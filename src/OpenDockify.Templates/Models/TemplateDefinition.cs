@@ -64,4 +64,11 @@ public sealed class ValidationRule
     public DateOnly? DateFrom { get; set; }
 
     public DateOnly? DateTo { get; set; }
+
+    /// <summary>
+    /// Marks a number field as an annual interest rate (percent): the
+    /// generation flow compares its value against the configured LPR and
+    /// returns a non-blocking warning when it exceeds the LPR or 4× LPR.
+    /// </summary>
+    public bool IsInterestRate { get; set; }
 }

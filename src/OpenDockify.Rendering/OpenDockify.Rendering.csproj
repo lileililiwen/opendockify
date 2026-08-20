@@ -1,14 +1,20 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <ItemGroup>
-    <ProjectReference Include="..\OpenDockify.SystemConfig\OpenDockify.SystemConfig.csproj" />
-    <ProjectReference Include="..\OpenDockify.Finance\OpenDockify.Finance.csproj" />
-  </ItemGroup>
-
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="8.0.*" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.*" />
+    <PackageReference Include="QuestPDF" Version="2024.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\OpenDockify.SystemConfig\OpenDockify.SystemConfig.csproj" />
+    <ProjectReference Include="..\OpenDockify.Finance\OpenDockify.Finance.csproj" />
+  </ItemGroup>
 
 </Project>

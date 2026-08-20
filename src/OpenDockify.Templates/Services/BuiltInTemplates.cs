@@ -32,7 +32,7 @@ public static class BuiltInTemplates
                 new FieldDefinition { Name = "borrowerName", Label = "借款人姓名", Type = FieldType.Text, Required = true },
                 new FieldDefinition { Name = "idCard", Label = "借款人身份证号", Type = FieldType.Text, Required = true },
                 new FieldDefinition { Name = "amount", Label = "借款金额（元）", Type = FieldType.Currency, Required = true },
-                new FieldDefinition { Name = "annualRate", Label = "年利率（%）", Type = FieldType.Number, Required = true, Validation = new ValidationRule { Min = 0, Max = 100 } },
+                new FieldDefinition { Name = "annualRate", Label = "年利率（%）", Type = FieldType.Number, Required = true, Validation = new ValidationRule { Min = 0, Max = 100, IsInterestRate = true } },
                 new FieldDefinition { Name = "loanDate", Label = "借款日期", Type = FieldType.Date, Required = true },
                 new FieldDefinition { Name = "dueDate", Label = "还款日期", Type = FieldType.Date, Required = true },
             },

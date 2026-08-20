@@ -27,7 +27,7 @@ public static class InterestRateValidator
     {
         if (annualRatePct <= lprPct)
         {
-            return new InterestRateValidation(RateLevel.Ok, $"年利率{annualRatePct}%未超过一年期LPR参考值（{lprPct}%）。");
+            return new InterestRateValidation(RateLevel.Ok, $"年利率{annualRatePct:0.##}%未超过一年期LPR参考值（{lprPct:0.##}%）。");
         }
 
         var cap = lprPct * JudicialProtectionCapMultiplier;
@@ -35,11 +35,11 @@ public static class InterestRateValidator
         {
             return new InterestRateValidation(
                 RateLevel.OverCap,
-                $"年利率{annualRatePct}%已超过一年期LPR（{lprPct}%）4倍的法律保护上限（{cap}%），超出部分可能不受法律保护。");
+                $"年利率{annualRatePct:0.##}%已超过一年期LPR（{lprPct:0.##}%）4倍的法律保护上限（{cap:0.##}%），超出部分可能不受法律保护。");
         }
 
         return new InterestRateValidation(
             RateLevel.OverLpr,
-            $"年利率{annualRatePct}%已超过一年期LPR参考值（{lprPct}%），请注意利率合规风险。");
+            $"年利率{annualRatePct:0.##}%已超过一年期LPR参考值（{lprPct:0.##}%），请注意利率合规风险。");
     }
 }
