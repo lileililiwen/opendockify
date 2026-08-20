@@ -263,13 +263,21 @@ None yet — the project is at spec-first bootstrapping stage.
 | Order | Change | Capabilities | One-line summary |
 |---|---|---|---|
 | 1 | `platform-foundation` | platform-foundation | Solution scaffold, modular monolith, pluggable EF Core providers (SQLite/Postgres/MySQL/SQL Server), Docker, single-file publish, MIT, README disclaimer |
-| 2 | `user-auth` | user-auth | Username/password + JWT, roles Regular User/Administrator, multi-user isolation |
-| 3 | `system-config` | system-config | Global config in DB (AI toggle, LLM endpoint/key, LPR values), env overrides |
-| 4 | `template-engine` | template-engine | JSON template definition (fields, validation, clauses), `{{var}}` rendering, 8 built-ins, copy-not-edit |
-| 5 | `finance-conversion` | finance-conversion | RMB uppercase amount conversion (edge cases), LPR/interest-rate validation |
-| 6 | `document-generation` | document-generation, pdf-rendering | Fill → validate → render full text + risk notice → PDF → persist record → download/preview/re-edit/list/delete |
-| 7 | `ai-assist` | ai-assist | Optional LLM polish (config-toggleable), strict prompt constraints, usage logging |
-| 8 | `esign-extensions` | esign-extensions | RESERVED signing status field, signer entities, audit log; interface skeletons only |
+| 2 | `editorconfig-and-analyzers` | editorconfig-and-analyzers | Root `.editorconfig` + shared `Directory.Build.props`, SonarAnalyzer, deterministic `dotnet format` |
+| 3 | `architecture-enforcement` | architecture-enforcement | ArchUnitNET tests enforcing the modular-monolith boundary rules |
+| 4 | `coverage-gates` | coverage-gates | xUnit test project, Coverlet OpenCover collector, incremental 80% new-code gate script |
+| 5 | `nuget-audit` | nuget-audit | Restore-time + CI NuGet vulnerability scanning, explicit accept policy |
+| 6 | `git-hooks` | git-hooks | Husky.Net local pre-commit (format) + pre-push (build) hooks, auto-install |
+| 7 | `ci-pipeline` | ci-pipeline | CI on push/PR: restore, audit, format, build 0/0, tests, incremental coverage |
+| 8 | `ai-code-conventions` | ai-code-conventions | AI-involvement PR markers, AI review checklist, non-blocking large-diff warning |
+| 9 | `branch-protection` | branch-protection | Protected `main` policy + CONTRIBUTING + PR template |
+| 10 | `user-auth` | user-auth | Username/password + JWT, roles Regular User/Administrator, multi-user isolation |
+| 11 | `system-config` | system-config | Global config in DB (AI toggle, LLM endpoint/key, LPR values), env overrides |
+| 12 | `template-engine` | template-engine | JSON template definition (fields, validation, clauses), `{{var}}` rendering, 8 built-ins, copy-not-edit |
+| 13 | `finance-conversion` | finance-conversion | RMB uppercase amount conversion (edge cases), LPR/interest-rate validation |
+| 14 | `document-generation` | document-generation, pdf-rendering | Fill → validate → render full text + risk notice → PDF → persist record → download/preview/re-edit/list/delete |
+| 15 | `ai-assist` | ai-assist | Optional LLM polish (config-toggleable), strict prompt constraints, usage logging |
+| 16 | `esign-extensions` | esign-extensions | RESERVED signing status field, signer entities, audit log; interface skeletons only |
 
 ### 7.3 Deferred roadmap
 
