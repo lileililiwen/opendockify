@@ -256,7 +256,13 @@ When asked to implement a feature or spec:
 
 ### 7.1 Shipped & archived
 
-None yet — the project is at spec-first bootstrapping stage.
+Source of truth in `openspec/specs/`. The platform foundation plus the eight
+quality capabilities are implemented and archived (2026-08-20):
+`platform-foundation`, `editorconfig-and-analyzers`, `architecture-enforcement`,
+`coverage-gates`, `nuget-audit`, `git-hooks`, `ci-pipeline`,
+`ai-code-conventions`, `branch-protection`. Build is 0 warnings/0 errors; unit
++ architecture tests green; Postgres provider switch smoke-tested; Docker image
+build verification deferred (optional deployment path, not a build dependency).
 
 ### 7.2 Pending changes (implement in this order)
 
