@@ -15,6 +15,10 @@ services:
       # AI assist (optional): set Ai__Enabled, Ai__Endpoint, Ai__ApiKey, Ai__Model
       #   (do NOT put real secrets in a committed compose file; use an .env file)
       ASPNETCORE_URLS: http://+:8080
+      Jwt__Secret: "${OPENDOCKIFY_JWT_SECRET:?Set OPENDOCKIFY_JWT_SECRET in .env}"
+      Seed__AdminUsername: "${OPENDOCKIFY_ADMIN_USERNAME:-admin}"
+      Seed__AdminPassword: "${OPENDOCKIFY_ADMIN_PASSWORD:?Set OPENDOCKIFY_ADMIN_PASSWORD in .env}"
+      Auth__AllowRegistration: "${OPENDOCKIFY_ALLOW_REGISTRATION:-false}"
     restart: unless-stopped
 
 volumes:

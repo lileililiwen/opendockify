@@ -1,8 +1,5 @@
-# user-auth Specification
+## MODIFIED Requirements
 
-## Purpose
-TBD - created by archiving change user-auth. Update Purpose after archive.
-## Requirements
 ### Requirement: User registration
 
 The system SHALL allow public registration only when `Auth:AllowRegistration` is
@@ -67,37 +64,6 @@ until its configured expiry, and login attempts SHALL be rate limited per client
 - **THEN** additional login requests return `429 Too Many Requests` without
   validating credentials
 
-### Requirement: Roles
-
-The system SHALL support exactly two roles — `Regular` and `Administrator` —
-and SHALL enforce an administrator-only authorization policy on admin
-endpoints.
-
-#### Scenario: Regular user denied admin endpoint
-
-- **WHEN** a user with role `Regular` calls an admin-only endpoint
-- **THEN** the API returns `403 Forbidden`
-
-#### Scenario: Administrator allowed admin endpoint
-
-- **WHEN** a user with role `Administrator` calls an admin-only endpoint
-- **THEN** the request is authorized and processed
-
-### Requirement: Current user identity
-
-The system SHALL expose the currently authenticated user's identity (id,
-username, role) via an authenticated endpoint.
-
-#### Scenario: Get current user
-
-- **WHEN** a client sends a valid JWT to `/api/auth/me`
-- **THEN** the API returns the user id, username, and role
-
-#### Scenario: Unauthenticated access
-
-- **WHEN** a client calls `/api/auth/me` without a valid JWT
-- **THEN** the API returns `401 Unauthorized`
-
 ### Requirement: Default administrator seeding
 
 The system SHALL seed an initial administrator account when the database is empty
@@ -120,16 +86,3 @@ default credentials.
 - **WHEN** production configuration omits seed credentials or uses the documented
   development password
 - **THEN** startup is rejected before the seeder runs
-
-### Requirement: Multi-user isolation
-
-The system SHALL scope all user-owned queries (templates, documents) to the
-authenticated user's id so that a user can never observe or mutate another
-user's data.
-
-#### Scenario: Cross-user access blocked
-
-- **WHEN** a user requests a document or template owned by a different user
-- **THEN** the API returns `404 Not Found` (not the data, not a leak of
-  existence)
-

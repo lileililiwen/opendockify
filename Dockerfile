@@ -3,13 +3,17 @@
 
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
+ENV HUSKY=0
 
 COPY . .
-RUN dotnet restore OpenDockify.sln
+RUN --mount=type=cache,target=/root/.nuget/packages \
+    dotnet restore src/OpenDockify.Api/OpenDockify.Api.csproj -r linux-x64
 
-RUN dotnet publish src/OpenDockify.Api/OpenDockify.Api.csproj \
+RUN --mount=type=cache,target=/root/.nuget/packages \
+    dotnet publish src/OpenDockify.Api/OpenDockify.Api.csproj \
     -c Release \
     -r linux-x64 \
+    --no-restore \
     --self-contained true \
     -p:PublishSingleFile=true \
     -p:IncludeNativeLibrariesForSelfExtract=true \
@@ -21,7 +25,7 @@ FROM mcr.microsoft.com/dotnet/runtime-deps:8.0 AS final
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends fonts-noto-cjk ca-certificates \
+    && apt-get install -y --no-install-recommends fonts-noto-cjk ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /app/publish ./

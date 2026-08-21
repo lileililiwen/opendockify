@@ -31,8 +31,10 @@ public sealed class AdminSeeder : IDbSeeder
         var config = services.GetRequiredService<IConfiguration>();
         var account = services.GetRequiredService<AccountService>();
 
-        var username = config["Seed:AdminUsername"] ?? "admin";
-        var password = config["Seed:AdminPassword"] ?? "admin123";
+        var username = config["Seed:AdminUsername"]
+            ?? throw new InvalidOperationException("Seed:AdminUsername is not configured.");
+        var password = config["Seed:AdminPassword"]
+            ?? throw new InvalidOperationException("Seed:AdminPassword is not configured.");
 
         await account.RegisterAsync(
             username,

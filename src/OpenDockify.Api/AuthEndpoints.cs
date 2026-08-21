@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using OpenDockify.Auth;
 using OpenDockify.Auth.Models;
@@ -20,10 +22,18 @@ public static class AuthEndpoints
 
         group.MapPost("/register", async (
             RegisterRequest request,
+            IConfiguration configuration,
             AccountService account,
             JwtTokenService tokens,
             CancellationToken ct) =>
         {
+            if (!AuthSecurityOptions.IsRegistrationAllowed(configuration))
+            {
+                return Results.Json(
+                    new { error = "Public registration is disabled by the server administrator." },
+                    statusCode: StatusCodes.Status403Forbidden);
+            }
+
             var result = await account.RegisterAsync(
                 request.Username, request.Password, request.DisplayName ?? string.Empty, UserRole.Regular, ct);
 
@@ -36,7 +46,7 @@ public static class AuthEndpoints
 
             var token = tokens.IssueToken(result.User!.Id, result.User.Role.ToString());
             return Results.Ok(new AuthResponse(result.User.Id, result.User.Username, result.User.Role.ToString(), token));
-        });
+        }).RequireRateLimiting(AuthSecurityOptions.RegistrationPolicyName);
 
         group.MapPost("/login", async (
             LoginRequest request,
@@ -52,7 +62,7 @@ public static class AuthEndpoints
 
             var token = tokens.IssueToken(user.Id, user.Role.ToString());
             return Results.Ok(new AuthResponse(user.Id, user.Username, user.Role.ToString(), token));
-        });
+        }).RequireRateLimiting(AuthSecurityOptions.LoginPolicyName);
 
         group.MapGet("/me", async (
             System.Security.Claims.ClaimsPrincipal principal,

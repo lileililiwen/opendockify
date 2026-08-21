@@ -1,9 +1,12 @@
 using System.Text;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 using OpenDockify.AiAssist;
 using OpenDockify.Api;
 using OpenDockify.Auth;
+using OpenDockify.Auth.Services;
 using OpenDockify.Data;
 using OpenDockify.Esign;
 using OpenDockify.Finance;
@@ -13,6 +16,12 @@ using OpenDockify.SystemConfig;
 using OpenDockify.Templates;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Fail before migrations or HTTP startup when a production deployment still
+// has missing or development-only security credentials.
+SecurityBootstrapValidator.EnsureValid(
+    builder.Configuration,
+    builder.Environment.EnvironmentName);
 
 // Minimal API shell + composition root. Domain modules register here as
 // their changes land; the Data module provides the pluggable database
@@ -56,11 +65,45 @@ builder.Services.AddAuthorization(options =>
         policy.RequireRole("Administrator"));
 });
 
+var loginAttemptsPerMinute = AuthSecurityOptions.GetLoginAttemptsPerMinute(builder.Configuration);
+var registrationAttemptsPerHour = AuthSecurityOptions.GetRegistrationAttemptsPerHour(builder.Configuration);
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        await context.HttpContext.Response.WriteAsJsonAsync(
+            new { error = "Too many authentication attempts. Try again later." },
+            cancellationToken);
+    };
+    options.AddPolicy(AuthSecurityOptions.LoginPolicyName, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = loginAttemptsPerMinute,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true,
+            }));
+    options.AddPolicy(AuthSecurityOptions.RegistrationPolicyName, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = registrationAttemptsPerHour,
+                Window = TimeSpan.FromHours(1),
+                QueueLimit = 0,
+                AutoReplenishment = true,
+            }));
+});
+
 var app = builder.Build();
 
 // Health endpoint used by the Docker healthcheck.
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
 
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 

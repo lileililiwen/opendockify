@@ -15,6 +15,8 @@ opendockify.db
 opendockify.db-shm
 opendockify.db-wal
 .data/
+opendockify-app/
+run-*.sh
 .husky/
 scripts/
 Coverlet.runsettings

@@ -55,17 +55,22 @@ shown in the application UI.
 | ORM | EF Core |
 | Database | **SQLite** (default, zero setup) · PostgreSQL · MySQL/MariaDB · SQL Server |
 | PDF | QuestPDF (MIT); iText7 (AGPL) reserved for future existing-PDF overlays |
-| Frontend | React SPA (separate repository) |
+| Frontend | Flutter (Android, Web, and desktop targets) |
 
 ## Quick start (Docker, SQLite out of the box)
 
 ```bash
+cp .env.example .env
+# Edit .env and replace the JWT and administrator password placeholders.
 docker compose up -d
 # Open http://localhost:8080  (API on /healthz)
 ```
 
 No external database is required — OpenDockify uses a SQLite file stored in the
-Docker volume.
+Docker volume. Compose intentionally refuses to start until
+`OPENDOCKIFY_JWT_SECRET` and `OPENDOCKIFY_ADMIN_PASSWORD` are set to safe values.
+Public registration defaults to disabled in Docker; explicitly set
+`OPENDOCKIFY_ALLOW_REGISTRATION=true` only when self-registration is intended.
 
 ## Database providers
 
@@ -152,14 +157,17 @@ authority.
   long and MUST be overridden in production (the value in
   `appsettings.Development.json` is a local-development placeholder). Startup
   fails with a clear error if it is missing or too short.
-- **Login rate limiting** — registration is open and login attempts are
-  currently unthrottled. Self-hosters SHOULD rate-limit `/api/auth/login`
-  (and register) to slow credential stuffing, either with ASP.NET Core's
-  built-in Rate Limiting middleware or at the reverse proxy (e.g. nginx
-  `limit_req`). This is the deployer's responsibility for the MVP.
-- **Default admin** — the seeder creates `admin` / `admin123` when the
-  database is empty. Override both via `Seed:AdminUsername` /
-  `Seed:AdminPassword` (or their env forms) before any real deployment.
+- **Authentication rate limiting** — the API applies fixed-window, per-client
+  limits to login and registration. Configure them with
+  `Auth__LoginAttemptsPerMinute` and `Auth__RegistrationAttemptsPerHour`.
+  Multi-replica or Internet-facing installations SHOULD also enforce a shared
+  limit at a trusted reverse proxy.
+- **Registration** — public registration is controlled by
+  `Auth__AllowRegistration`; it is disabled by default outside local
+  development and in the supplied Compose deployment.
+- **Initial admin** — production startup requires `Seed:AdminUsername` and a
+  non-default `Seed:AdminPassword` of at least 12 characters. The local-only
+  `admin` / `admin123` credentials exist only in Development configuration.
 
 ## Development
 
