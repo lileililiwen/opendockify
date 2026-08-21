@@ -22,6 +22,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\OpenDockify.AiAssist\OpenDockify.AiAssist.csproj" />
     <ProjectReference Include="..\..\src\OpenDockify.Finance\OpenDockify.Finance.csproj" />
+    <ProjectReference Include="..\..\src\OpenDockify.Generation\OpenDockify.Generation.csproj" />
     <ProjectReference Include="..\..\src\OpenDockify.Templates\OpenDockify.Templates.csproj" />
     <ProjectReference Include="..\..\src\OpenDockify.Auth\OpenDockify.Auth.csproj" />
   </ItemGroup>

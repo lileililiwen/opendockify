@@ -10,16 +10,19 @@ class GenerateDocumentRequest {
   final List<String> selectedClauseIds;
 
   Map<String, dynamic> toJson() => {
-        'templateId': templateId,
-        'values': values,
-        'selectedClauseIds': selectedClauseIds,
-      };
+    'templateId': templateId,
+    'values': values,
+    'selectedClauseIds': selectedClauseIds,
+  };
 }
 
 class DocumentSummary {
   const DocumentSummary({
     required this.id,
+    required this.title,
     required this.templateId,
+    required this.templateName,
+    required this.isArchived,
     this.parentId,
     required this.status,
     required this.signingStatus,
@@ -27,15 +30,22 @@ class DocumentSummary {
   });
 
   final String id;
+  final String title;
   final String templateId;
+  final String templateName;
+  final bool isArchived;
   final String? parentId;
   final String status;
   final String signingStatus;
   final DateTime? createdAt;
 
-  factory DocumentSummary.fromJson(Map<String, dynamic> json) => DocumentSummary(
+  factory DocumentSummary.fromJson(Map<String, dynamic> json) =>
+      DocumentSummary(
         id: json['id']?.toString() ?? '',
+        title: json['title']?.toString() ?? '',
         templateId: json['templateId']?.toString() ?? '',
+        templateName: json['templateName']?.toString() ?? '',
+        isArchived: json['isArchived'] == true,
         parentId: json['parentId']?.toString(),
         status: json['status']?.toString() ?? '',
         signingStatus: json['signingStatus']?.toString() ?? '',
@@ -46,7 +56,10 @@ class DocumentSummary {
 class DocumentView {
   const DocumentView({
     required this.id,
+    required this.title,
     required this.templateId,
+    required this.templateName,
+    required this.isArchived,
     this.parentId,
     required this.status,
     required this.signingStatus,
@@ -57,7 +70,10 @@ class DocumentView {
   });
 
   final String id;
+  final String title;
   final String templateId;
+  final String templateName;
+  final bool isArchived;
   final String? parentId;
   final String status;
   final String signingStatus;
@@ -67,16 +83,19 @@ class DocumentView {
   final String? downloadUrl;
 
   factory DocumentView.fromJson(Map<String, dynamic> json) => DocumentView(
-        id: json['id']?.toString() ?? '',
-        templateId: json['templateId']?.toString() ?? '',
-        parentId: json['parentId']?.toString(),
-        status: json['status']?.toString() ?? '',
-        signingStatus: json['signingStatus']?.toString() ?? '',
-        snapshotJson: json['snapshotJson']?.toString() ?? '',
-        renderedText: json['renderedText']?.toString() ?? '',
-        createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? ''),
-        downloadUrl: json['downloadUrl']?.toString(),
-      );
+    id: json['id']?.toString() ?? '',
+    title: json['title']?.toString() ?? '',
+    templateId: json['templateId']?.toString() ?? '',
+    templateName: json['templateName']?.toString() ?? '',
+    isArchived: json['isArchived'] == true,
+    parentId: json['parentId']?.toString(),
+    status: json['status']?.toString() ?? '',
+    signingStatus: json['signingStatus']?.toString() ?? '',
+    snapshotJson: json['snapshotJson']?.toString() ?? '',
+    renderedText: json['renderedText']?.toString() ?? '',
+    createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? ''),
+    downloadUrl: json['downloadUrl']?.toString(),
+  );
 }
 
 class DocumentListPage {
@@ -96,9 +115,14 @@ class DocumentListPage {
 
   bool get hasMore => page < totalPages;
 
-  factory DocumentListPage.fromJson(Map<String, dynamic> json) => DocumentListPage(
+  factory DocumentListPage.fromJson(Map<String, dynamic> json) =>
+      DocumentListPage(
         items: (json['items'] is List ? json['items'] as List : const [])
-            .map((e) => DocumentSummary.fromJson(e is Map<String, dynamic> ? e : <String, dynamic>{}))
+            .map(
+              (e) => DocumentSummary.fromJson(
+                e is Map<String, dynamic> ? e : <String, dynamic>{},
+              ),
+            )
             .toList(),
         page: (json['page'] as num?)?.toInt() ?? 1,
         pageSize: (json['pageSize'] as num?)?.toInt() ?? 20,
@@ -124,7 +148,9 @@ class GenerateResult {
     final warnings = warningsRaw is List
         ? warningsRaw.whereType<String>().toList()
         : <String>[];
-    final doc = docJson is Map<String, dynamic> ? DocumentView.fromJson(docJson) : null;
+    final doc = docJson is Map<String, dynamic>
+        ? DocumentView.fromJson(docJson)
+        : null;
     return GenerateResult(
       document: doc ?? DocumentView.fromJson(const {}),
       warnings: warnings,

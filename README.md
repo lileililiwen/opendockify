@@ -33,7 +33,8 @@ shown in the application UI.
   editable versions.
 - **Document generation** — fill the form → validate → render full text with
   the risk notice → export PDF → keep an immutable history (re-editing creates
-  a new record).
+  a new record). The document library supports titles, template-aware search,
+  active/archived filters, deterministic sorting, and connected version history.
 - **Chinese finance features** — currency fields render as RMB-uppercase
   (中文大写); annual interest rates are validated against the LPR reference with
   a warning (never blocking).

@@ -24,6 +24,12 @@ public sealed class Document
 
     public Guid TemplateId { get; set; }
 
+    /// <summary>Owner-editable library label; legal content remains immutable.</summary>
+    public string Title { get; set; } = string.Empty;
+
+    /// <summary>Owner-editable library organization state.</summary>
+    public bool IsArchived { get; set; }
+
     public DocumentStatus Status { get; set; } = DocumentStatus.Generated;
 
     /// <summary>Reserved e-signature state; never changed by MVP flows.</summary>

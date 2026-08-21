@@ -18,6 +18,13 @@ public sealed class DocumentConfiguration : IEntityTypeConfiguration<Document>
         builder.Property(d => d.TemplateId)
             .IsRequired();
 
+        builder.Property(d => d.Title)
+            .HasMaxLength(200)
+            .IsRequired();
+
+        builder.Property(d => d.IsArchived)
+            .IsRequired();
+
         builder.Property(d => d.Status)
             .HasConversion<int>()
             .IsRequired();
@@ -40,6 +47,8 @@ public sealed class DocumentConfiguration : IEntityTypeConfiguration<Document>
             .IsRequired();
 
         builder.HasIndex(d => d.OwnerId);
+        builder.HasIndex(d => new { d.OwnerId, d.IsArchived, d.CreatedAt });
+        builder.HasIndex(d => new { d.OwnerId, d.Title });
         builder.HasIndex(d => d.TemplateId);
         builder.HasIndex(d => d.ParentId);
     }

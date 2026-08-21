@@ -16,7 +16,11 @@ class FakeAdapter implements HttpClientAdapter {
   Object? Function(RequestOptions options)? responder;
 
   @override
-  Future<ResponseBody> fetch(RequestOptions options, Stream<Uint8List>? requestStream, Future<void>? cancelFuture) async {
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
     requests.add(options);
     final body = responder?.call(options);
     final statusCode = body is int ? body : 200;
@@ -43,7 +47,11 @@ void main() {
   setUp(() {
     tokens = TokenProvider()..token = 'jwt';
     adapter = FakeAdapter();
-    client = ApiClient(baseUrl: 'http://test', tokens: tokens, httpAdapter: adapter);
+    client = ApiClient(
+      baseUrl: 'http://test',
+      tokens: tokens,
+      httpAdapter: adapter,
+    );
     client.onUnauthorized = () => unauthCalls.add(1);
     adapterResponds(adapter);
   });
@@ -74,11 +82,41 @@ void main() {
     expect(template.definitionJson, '{"fields":[]}');
   });
 
-  test('listDocuments sends page query parameters', () async {
-    final page = await client.listDocuments(page: 2, pageSize: 10);
+  test('listDocuments sends page and library query parameters', () async {
+    final page = await client.listDocuments(
+      page: 2,
+      pageSize: 10,
+      search: 'loan',
+      archive: 'archived',
+      sort: 'title',
+    );
     expect(page.page, 1);
     expect(adapter.requests.last.queryParameters['page'], 2);
     expect(adapter.requests.last.queryParameters['pageSize'], 10);
+    expect(adapter.requests.last.queryParameters['search'], 'loan');
+    expect(adapter.requests.last.queryParameters['archive'], 'archived');
+    expect(adapter.requests.last.queryParameters['sort'], 'title');
+  });
+
+  test('updateDocumentMetadata sends title and archive state', () async {
+    final document = await client.updateDocumentMetadata(
+      'd1',
+      title: 'Renamed',
+      isArchived: true,
+    );
+    expect(document.title, 'Renamed');
+    expect(adapter.requests.last.method, 'PUT');
+    expect(adapter.requests.last.path, '/api/documents/d1/metadata');
+    expect(adapter.requests.last.data, {
+      'title': 'Renamed',
+      'isArchived': true,
+    });
+  });
+
+  test('getDocumentVersions parses version summaries', () async {
+    final versions = await client.getDocumentVersions('d1');
+    expect(versions.single.title, 'Renamed');
+    expect(adapter.requests.last.path, '/api/documents/d1/versions');
   });
 
   test('generateDocument posts the snapshot contract', () async {
@@ -105,7 +143,13 @@ void main() {
     adapter.responder = (options) => 401;
     await expectLater(
       client.me(),
-      throwsA(isA<ApiError>().having((e) => e.kind, 'kind', ApiErrorKind.unauthorized)),
+      throwsA(
+        isA<ApiError>().having(
+          (e) => e.kind,
+          'kind',
+          ApiErrorKind.unauthorized,
+        ),
+      ),
     );
     expect(unauthCalls, hasLength(1));
   });
@@ -114,7 +158,9 @@ void main() {
     adapter.responder = (options) => 500;
     await expectLater(
       client.me(),
-      throwsA(isA<ApiError>().having((e) => e.kind, 'kind', ApiErrorKind.server)),
+      throwsA(
+        isA<ApiError>().having((e) => e.kind, 'kind', ApiErrorKind.server),
+      ),
     );
   });
 
@@ -122,7 +168,9 @@ void main() {
     adapter.responder = (options) => 404;
     await expectLater(
       client.me(),
-      throwsA(isA<ApiError>().having((e) => e.kind, 'kind', ApiErrorKind.notFound)),
+      throwsA(
+        isA<ApiError>().having((e) => e.kind, 'kind', ApiErrorKind.notFound),
+      ),
     );
   });
 }
@@ -149,7 +197,14 @@ void adapterResponds(FakeAdapter a) {
         };
       case '/api/templates/marketplace':
         return [
-          {'id': 't1', 'name': 'Loan', 'category': 'finance', 'description': 'd', 'isBuiltIn': true, 'isPublic': true}
+          {
+            'id': 't1',
+            'name': 'Loan',
+            'category': 'finance',
+            'description': 'd',
+            'isBuiltIn': true,
+            'isPublic': true,
+          },
         ];
       case '/api/documents':
         return {
@@ -171,9 +226,40 @@ void adapterResponds(FakeAdapter a) {
           },
           'warnings': [],
         };
+      case '/api/documents/d1/metadata':
+        return {
+          'id': 'd1',
+          'title': 'Renamed',
+          'templateId': 't1',
+          'templateName': 'Loan IOU',
+          'isArchived': true,
+          'status': 'Generated',
+          'signingStatus': 'NotStarted',
+          'snapshotJson': '{"values":{}}',
+          'renderedText': 'Rendered',
+        };
+      case '/api/documents/d1/versions':
+        return [
+          {
+            'id': 'd1',
+            'title': 'Renamed',
+            'templateId': 't1',
+            'templateName': 'Loan IOU',
+            'isArchived': true,
+            'status': 'Generated',
+            'signingStatus': 'NotStarted',
+            'createdAt': '2026-01-01T00:00:00Z',
+          },
+        ];
       case '/api/admin/settings':
         return [
-          {'key': 'Ai:Enabled', 'value': 'true', 'source': 'appsettings', 'isSecret': false, 'masked': false}
+          {
+            'key': 'Ai:Enabled',
+            'value': 'true',
+            'source': 'appsettings',
+            'isSecret': false,
+            'masked': false,
+          },
         ];
       default:
         if (options.path == '/api/templates/t1') {

@@ -23,9 +23,17 @@ public static class DocumentEndpoints
             DocumentService documents,
             int page = 1,
             int pageSize = 20,
+            string? search = null,
+            string? archive = null,
+            string? sort = null,
             CancellationToken ct = default) =>
         {
-            var result = await documents.ListAsync(CurrentUserId(http), page, pageSize, ct);
+            if (!DocumentLibraryQuery.TryCreate(search, archive, sort, out var libraryQuery, out var error))
+            {
+                return Results.Json(new { error }, statusCode: StatusCodes.Status400BadRequest);
+            }
+
+            var result = await documents.ListAsync(CurrentUserId(http), page, pageSize, libraryQuery, ct);
             return Results.Ok(new
             {
                 items = result.Items.Select(ToSummary),
@@ -59,6 +67,38 @@ public static class DocumentEndpoints
                 : Results.Ok(ToView(result.Value!));
         });
 
+        group.MapPut("/{id:guid}/metadata", async (
+            HttpContext http,
+            Guid id,
+            UpdateDocumentMetadataRequest request,
+            DocumentService documents,
+            CancellationToken ct) =>
+        {
+            var result = await documents.UpdateMetadataAsync(
+                CurrentUserId(http), id, request.Title, request.IsArchived, ct);
+            return result.ErrorKind switch
+            {
+                DocumentMetadataErrorKind.None => Results.Ok(ToView(result.Detail!)),
+                DocumentMetadataErrorKind.NotFound => Results.Json(
+                    new { error = result.Error }, statusCode: StatusCodes.Status404NotFound),
+                DocumentMetadataErrorKind.Validation => Results.Json(
+                    new { error = result.Error }, statusCode: StatusCodes.Status400BadRequest),
+                _ => Results.StatusCode(StatusCodes.Status500InternalServerError),
+            };
+        });
+
+        group.MapGet("/{id:guid}/versions", async (
+            HttpContext http,
+            Guid id,
+            DocumentService documents,
+            CancellationToken ct) =>
+        {
+            var result = await documents.GetVersionHistoryAsync(CurrentUserId(http), id, ct);
+            return result.NotFound
+                ? Results.Json(new { error = "Document not found." }, statusCode: StatusCodes.Status404NotFound)
+                : Results.Ok(result.Items.Select(ToSummary));
+        });
+
         group.MapPost("/{id:guid}/reedit", async (
             HttpContext http,
             Guid id,
@@ -83,7 +123,7 @@ public static class DocumentEndpoints
                 return Results.Json(new { error = "Document not found." }, statusCode: StatusCodes.Status404NotFound);
             }
 
-            var path = result.Value!.PdfPath;
+            var path = result.Value!.Document.PdfPath;
             if (!File.Exists(path))
             {
                 return Results.Json(new { error = "PDF file is missing." }, statusCode: StatusCodes.Status404NotFound);
@@ -119,7 +159,7 @@ public static class DocumentEndpoints
         {
             GenerationErrorKind.None => Results.Json(new
             {
-                document = ToView(result.Document!),
+                document = ToView(result.Document!, result.TemplateName),
                 warnings = result.Warnings,
                 downloadUrl = $"/api/documents/{result.Document!.Id}/download",
             }),
@@ -131,28 +171,39 @@ public static class DocumentEndpoints
         };
     }
 
-    private static object ToSummary(Document document)
+    private static object ToSummary(DocumentLibraryItem document)
     {
         return new
         {
             document.Id,
+            document.Title,
             document.TemplateId,
+            document.TemplateName,
+            document.IsArchived,
             document.ParentId,
-            document.Status,
-            document.SigningStatus,
+            Status = document.Status.ToString(),
+            SigningStatus = document.SigningStatus.ToString(),
             document.CreatedAt,
         };
     }
 
-    private static object ToView(Document document)
+    private static object ToView(DocumentLibraryDetail detail)
+    {
+        return ToView(detail.Document, detail.TemplateName, detail.Title);
+    }
+
+    private static object ToView(Document document, string? templateName, string? resolvedTitle = null)
     {
         return new
         {
             document.Id,
+            Title = resolvedTitle ?? document.Title,
             document.TemplateId,
+            TemplateName = templateName ?? string.Empty,
+            document.IsArchived,
             document.ParentId,
-            document.Status,
-            document.SigningStatus,
+            Status = document.Status.ToString(),
+            SigningStatus = document.SigningStatus.ToString(),
             document.SnapshotJson,
             document.RenderedText,
             document.CreatedAt,
@@ -165,3 +216,5 @@ public sealed record GenerateDocumentRequest(
     Guid TemplateId,
     Dictionary<string, string> Values,
     List<string> SelectedClauseIds);
+
+public sealed record UpdateDocumentMetadataRequest(string? Title, bool IsArchived);

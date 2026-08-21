@@ -16,7 +16,10 @@ void main() {
     });
 
     test('defaults selectedClauseIds to empty', () {
-      final json = GenerateDocumentRequest(templateId: 't1', values: const {}).toJson();
+      final json = GenerateDocumentRequest(
+        templateId: 't1',
+        values: const {},
+      ).toJson();
       expect(json['selectedClauseIds'], isEmpty);
     });
   });
@@ -27,12 +30,15 @@ void main() {
         'items': [
           {
             'id': 'd1',
+            'title': 'Loan with Alice',
             'templateId': 't1',
+            'templateName': 'Loan IOU',
+            'isArchived': true,
             'parentId': null,
             'status': 'Generated',
             'signingStatus': 'NotStarted',
             'createdAt': '2026-01-01T00:00:00Z',
-          }
+          },
         ],
         'page': 1,
         'pageSize': 20,
@@ -41,6 +47,9 @@ void main() {
       });
       expect(page.items, hasLength(1));
       expect(page.items.first.id, 'd1');
+      expect(page.items.first.title, 'Loan with Alice');
+      expect(page.items.first.templateName, 'Loan IOU');
+      expect(page.items.first.isArchived, isTrue);
       expect(page.items.first.status, 'Generated');
       expect(page.hasMore, isFalse);
     });
@@ -82,16 +91,23 @@ void main() {
     test('parses snapshot shape used for re-edit', () {
       final doc = DocumentView.fromJson(const {
         'id': 'd1',
+        'title': 'Loan with Alice',
         'templateId': 't1',
+        'templateName': 'Loan IOU',
+        'isArchived': false,
         'parentId': 'd0',
         'status': 'Generated',
         'signingStatus': 'Signed',
-        'snapshotJson': '{"values":{"amount":"1000"},"selectedClauseIds":["cl1"]}',
+        'snapshotJson':
+            '{"values":{"amount":"1000"},"selectedClauseIds":["cl1"]}',
         'renderedText': 'text',
         'createdAt': '2026-01-01T00:00:00Z',
         'downloadUrl': '/api/documents/d1/download',
       });
       expect(doc.snapshotJson, contains('selectedClauseIds'));
+      expect(doc.title, 'Loan with Alice');
+      expect(doc.templateName, 'Loan IOU');
+      expect(doc.isArchived, isFalse);
       expect(doc.parentId, 'd0');
       expect(doc.downloadUrl, isNotNull);
     });

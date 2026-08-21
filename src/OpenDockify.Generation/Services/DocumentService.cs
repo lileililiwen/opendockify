@@ -23,18 +23,19 @@ public enum GenerationErrorKind
 
 public sealed record GenerateResult(
     Document? Document,
+    string? TemplateName,
     IReadOnlyList<string> Warnings,
     GenerationErrorKind ErrorKind,
     string? Error)
 {
-    public static GenerateResult Success(Document document, IReadOnlyList<string> warnings)
+    public static GenerateResult Success(Document document, string templateName, IReadOnlyList<string> warnings)
     {
-        return new(document, warnings, GenerationErrorKind.None, null);
+        return new(document, templateName, warnings, GenerationErrorKind.None, null);
     }
 
     public static GenerateResult Failure(GenerationErrorKind kind, string error)
     {
-        return new(null, [], kind, error);
+        return new(null, null, [], kind, error);
     }
 }
 
@@ -44,11 +45,54 @@ public sealed record GenerateCommand(
     List<string> SelectedClauseIds);
 
 public sealed record DocumentListPage(
-    IReadOnlyList<Document> Items,
+    IReadOnlyList<DocumentLibraryItem> Items,
     int Page,
     int PageSize,
     int TotalCount,
     int TotalPages);
+
+public sealed record DocumentLibraryItem(
+    Guid Id,
+    Guid TemplateId,
+    string TemplateName,
+    string Title,
+    bool IsArchived,
+    Guid? ParentId,
+    DocumentStatus Status,
+    OpenDockify.Esign.Models.SigningStatus SigningStatus,
+    DateTime CreatedAt);
+
+public sealed record DocumentLibraryDetail(
+    Document Document,
+    string TemplateName,
+    string Title);
+
+public enum DocumentMetadataErrorKind
+{
+    None,
+    NotFound,
+    Validation,
+}
+
+public sealed record DocumentMetadataResult(
+    DocumentLibraryDetail? Detail,
+    DocumentMetadataErrorKind ErrorKind,
+    string? Error)
+{
+    public static DocumentMetadataResult Success(DocumentLibraryDetail detail)
+    {
+        return new DocumentMetadataResult(detail, DocumentMetadataErrorKind.None, null);
+    }
+
+    public static DocumentMetadataResult Failure(DocumentMetadataErrorKind kind, string error)
+    {
+        return new DocumentMetadataResult(null, kind, error);
+    }
+}
+
+public sealed record DocumentVersionHistoryResult(
+    bool NotFound,
+    IReadOnlyList<DocumentLibraryItem> Items);
 
 /// <summary>Parameter snapshot stored on each document record.</summary>
 public sealed record DocumentSnapshot(
@@ -112,6 +156,8 @@ public sealed class DocumentService(
             Id = Guid.NewGuid(),
             OwnerId = userId,
             TemplateId = template.Id,
+            Title = template.Name,
+            IsArchived = false,
             Status = DocumentStatus.Generated,
             SnapshotJson = SerializeSnapshot(command),
             RenderedText = fullText,
@@ -133,7 +179,7 @@ public sealed class DocumentService(
         db.Set<Document>().Add(document);
         await db.SaveChangesAsync(cancellationToken);
 
-        return GenerateResult.Success(document, warnings);
+        return GenerateResult.Success(document, template.Name, warnings);
     }
 
     /// <summary>
@@ -159,6 +205,7 @@ public sealed class DocumentService(
         if (result.Document is not null)
         {
             result.Document.ParentId = original.Id;
+            result.Document.Title = DocumentLibraryPolicy.ResolveTitle(original.Title, result.TemplateName ?? "Document");
             await db.SaveChangesAsync(cancellationToken);
         }
 
@@ -169,38 +216,152 @@ public sealed class DocumentService(
         Guid userId,
         int page,
         int pageSize,
+        DocumentLibraryQuery libraryQuery,
         CancellationToken cancellationToken = default)
     {
         page = Math.Max(page, 1);
         pageSize = Math.Clamp(pageSize, 1, 100);
 
-        var query = db.Set<Document>()
-            .Where(d => d.OwnerId == userId)
-            .OrderByDescending(d => d.CreatedAt);
+        var filtered = from document in db.Set<Document>()
+                       join template in db.Set<Template>() on document.TemplateId equals template.Id
+                       where document.OwnerId == userId
+                       select new { Document = document, TemplateName = template.Name };
 
-        var total = await query.CountAsync(cancellationToken);
-        var items = await query
+        filtered = libraryQuery.Archive switch
+        {
+            DocumentArchiveFilter.Active => filtered.Where(item => !item.Document.IsArchived),
+            DocumentArchiveFilter.Archived => filtered.Where(item => item.Document.IsArchived),
+            _ => filtered,
+        };
+
+        if (libraryQuery.Search is string search)
+        {
+            var normalizedSearch = search.ToLowerInvariant();
+#pragma warning disable CA1304, CA1311, CA1862 // EF translates ToLower/Contains to provider SQL; StringComparison is not translatable.
+            filtered = filtered.Where(item =>
+                item.Document.Title.ToLower().Contains(normalizedSearch)
+                || item.TemplateName.ToLower().Contains(normalizedSearch));
+#pragma warning restore CA1304, CA1311, CA1862
+        }
+
+        var ordered = libraryQuery.Sort switch
+        {
+            DocumentLibrarySort.Oldest => filtered
+                .OrderBy(item => item.Document.CreatedAt)
+                .ThenBy(item => item.Document.Id),
+            DocumentLibrarySort.Title => filtered
+                .OrderBy(item => item.Document.Title == string.Empty ? item.TemplateName : item.Document.Title)
+                .ThenBy(item => item.Document.Id),
+            _ => filtered
+                .OrderByDescending(item => item.Document.CreatedAt)
+                .ThenBy(item => item.Document.Id),
+        };
+
+        var total = await filtered.CountAsync(cancellationToken);
+        var items = await ordered
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
+            .Select(item => new DocumentLibraryItem(
+                item.Document.Id,
+                item.Document.TemplateId,
+                item.TemplateName,
+                item.Document.Title == string.Empty ? item.TemplateName : item.Document.Title,
+                item.Document.IsArchived,
+                item.Document.ParentId,
+                item.Document.Status,
+                item.Document.SigningStatus,
+                item.Document.CreatedAt))
             .ToListAsync(cancellationToken);
 
         return new DocumentListPage(items, page, pageSize, total, (int)Math.Ceiling(total / (double)pageSize));
     }
 
-    public async Task<OwnedResourceResult<Document>> GetAsync(
+    public async Task<OwnedResourceResult<DocumentLibraryDetail>> GetAsync(
         Guid userId,
         Guid id,
         CancellationToken cancellationToken = default)
     {
-        var document = await db.Set<Document>()
-            .SingleOrDefaultAsync(d => d.Id == id, cancellationToken);
+        var detail = await (from document in db.Set<Document>()
+                            join template in db.Set<Template>() on document.TemplateId equals template.Id
+                            where document.Id == id && document.OwnerId == userId
+                            select new DocumentLibraryDetail(
+                                document,
+                                template.Name,
+                                document.Title == string.Empty ? template.Name : document.Title))
+            .SingleOrDefaultAsync(cancellationToken);
 
-        if (document is null || document.OwnerId != userId)
+        if (detail is null)
         {
-            return OwnedResourceResult.Missing<Document>();
+            return OwnedResourceResult.Missing<DocumentLibraryDetail>();
         }
 
-        return OwnedResourceResult.Found(document);
+        return OwnedResourceResult.Found(detail);
+    }
+
+    public async Task<DocumentMetadataResult> UpdateMetadataAsync(
+        Guid userId,
+        Guid id,
+        string? title,
+        bool isArchived,
+        CancellationToken cancellationToken = default)
+    {
+        var titleValidation = DocumentLibraryPolicy.ValidateTitle(title);
+        if (titleValidation.Error is not null)
+        {
+            return DocumentMetadataResult.Failure(DocumentMetadataErrorKind.Validation, titleValidation.Error);
+        }
+
+        var document = await db.Set<Document>()
+            .SingleOrDefaultAsync(d => d.Id == id && d.OwnerId == userId, cancellationToken);
+        if (document is null)
+        {
+            return DocumentMetadataResult.Failure(DocumentMetadataErrorKind.NotFound, "Document not found.");
+        }
+
+        document.Title = titleValidation.Title!;
+        document.IsArchived = isArchived;
+        await db.SaveChangesAsync(cancellationToken);
+
+        var templateName = await db.Set<Template>()
+            .Where(template => template.Id == document.TemplateId)
+            .Select(template => template.Name)
+            .SingleAsync(cancellationToken);
+        return DocumentMetadataResult.Success(new DocumentLibraryDetail(document, templateName, document.Title));
+    }
+
+    public async Task<DocumentVersionHistoryResult> GetVersionHistoryAsync(
+        Guid userId,
+        Guid id,
+        CancellationToken cancellationToken = default)
+    {
+        var documents = await (from document in db.Set<Document>()
+                               join template in db.Set<Template>() on document.TemplateId equals template.Id
+                               where document.OwnerId == userId
+                               select new DocumentLibraryItem(
+                                   document.Id,
+                                   document.TemplateId,
+                                   template.Name,
+                                   document.Title == string.Empty ? template.Name : document.Title,
+                                   document.IsArchived,
+                                   document.ParentId,
+                                   document.Status,
+                                   document.SigningStatus,
+                                   document.CreatedAt))
+            .ToListAsync(cancellationToken);
+
+        if (!documents.Any(document => document.Id == id))
+        {
+            return new DocumentVersionHistoryResult(true, []);
+        }
+
+        var links = documents
+            .Select(document => new DocumentVersionLink(document.Id, document.ParentId, document.CreatedAt))
+            .ToList();
+        var connected = DocumentLibraryPolicy.FindConnectedVersions(links, id);
+        var documentsById = documents.ToDictionary(document => document.Id);
+        return new DocumentVersionHistoryResult(
+            false,
+            connected.Select(link => documentsById[link.Id]).ToList());
     }
 
     public async Task<OwnedResourceResult<Document>> DeleteAsync(

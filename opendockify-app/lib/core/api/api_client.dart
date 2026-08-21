@@ -40,8 +40,8 @@ class ApiClient {
     this.onUnauthorized,
     HttpClientAdapter? httpAdapter,
   })
-      // ignore: prefer_initializing_formals
-      : _tokens = tokens {
+    // ignore: prefer_initializing_formals
+    : _tokens = tokens {
     _dio = Dio(
       BaseOptions(
         baseUrl: baseUrl,
@@ -89,16 +89,30 @@ class ApiClient {
   // ---- Auth ----
 
   Future<AuthResponse> login(String username, String password) async {
-    final data = await _guard(() => _dio.post('/api/auth/login', data: {'username': username, 'password': password}));
+    final data = await _guard(
+      () => _dio.post(
+        '/api/auth/login',
+        data: {'username': username, 'password': password},
+      ),
+    );
     return AuthResponse.fromJson(_asMap(data));
   }
 
-  Future<AuthResponse> register(String username, String password, String? displayName) async {
-    final data = await _guard(() => _dio.post('/api/auth/register', data: {
+  Future<AuthResponse> register(
+    String username,
+    String password,
+    String? displayName,
+  ) async {
+    final data = await _guard(
+      () => _dio.post(
+        '/api/auth/register',
+        data: {
           'username': username,
           'password': password,
           'displayName': displayName,
-        }));
+        },
+      ),
+    );
     return AuthResponse.fromJson(_asMap(data));
   }
 
@@ -111,7 +125,9 @@ class ApiClient {
 
   Future<List<TemplateSummary>> listMarketplace() async {
     final data = await _guard(() => _dio.get('/api/templates/marketplace'));
-    return _asList(data).map((e) => TemplateSummary.fromJson(_asMap(e))).toList();
+    return _asList(data)
+        .map((e) => TemplateSummary.fromJson(_asMap(e)))
+        .toList();
   }
 
   Future<Template> getTemplate(String id) async {
@@ -120,12 +136,19 @@ class ApiClient {
   }
 
   Future<Template> createTemplate(CreateTemplateRequest request) async {
-    final data = await _guard(() => _dio.post('/api/templates', data: request.toJson()));
+    final data = await _guard(
+      () => _dio.post('/api/templates', data: request.toJson()),
+    );
     return Template.fromJson(_asMap(data));
   }
 
-  Future<Template> updateTemplate(String id, CreateTemplateRequest request) async {
-    final data = await _guard(() => _dio.put('/api/templates/$id', data: request.toJson()));
+  Future<Template> updateTemplate(
+    String id,
+    CreateTemplateRequest request,
+  ) async {
+    final data = await _guard(
+      () => _dio.put('/api/templates/$id', data: request.toJson()),
+    );
     return Template.fromJson(_asMap(data));
   }
 
@@ -140,15 +163,34 @@ class ApiClient {
 
   // ---- Documents ----
 
-  Future<DocumentListPage> listDocuments({int page = 1, int pageSize = 20}) async {
+  Future<DocumentListPage> listDocuments({
+    int page = 1,
+    int pageSize = 20,
+    String search = '',
+    String archive = 'active',
+    String sort = 'newest',
+  }) async {
     final data = await _guard(
-      () => _dio.get('/api/documents', queryParameters: {'page': page, 'pageSize': pageSize}),
+      () => _dio.get(
+        '/api/documents',
+        queryParameters: {
+          'page': page,
+          'pageSize': pageSize,
+          if (search.trim().isNotEmpty) 'search': search.trim(),
+          'archive': archive,
+          'sort': sort,
+        },
+      ),
     );
     return DocumentListPage.fromJson(_asMap(data));
   }
 
-  Future<GenerateResult> generateDocument(GenerateDocumentRequest request) async {
-    final data = await _guard(() => _dio.post('/api/documents/generate', data: request.toJson()));
+  Future<GenerateResult> generateDocument(
+    GenerateDocumentRequest request,
+  ) async {
+    final data = await _guard(
+      () => _dio.post('/api/documents/generate', data: request.toJson()),
+    );
     return GenerateResult.fromJson(_asMap(data));
   }
 
@@ -157,13 +199,39 @@ class ApiClient {
     return DocumentView.fromJson(_asMap(data));
   }
 
-  Future<GenerateResult> reeditDocument(String id, GenerateDocumentRequest request) async {
-    final data = await _guard(() => _dio.post('/api/documents/$id/reedit', data: request.toJson()));
+  Future<GenerateResult> reeditDocument(
+    String id,
+    GenerateDocumentRequest request,
+  ) async {
+    final data = await _guard(
+      () => _dio.post('/api/documents/$id/reedit', data: request.toJson()),
+    );
     return GenerateResult.fromJson(_asMap(data));
   }
 
   Future<void> deleteDocument(String id) async {
     await _guard(() => _dio.delete('/api/documents/$id'));
+  }
+
+  Future<DocumentView> updateDocumentMetadata(
+    String id, {
+    required String title,
+    required bool isArchived,
+  }) async {
+    final data = await _guard(
+      () => _dio.put(
+        '/api/documents/$id/metadata',
+        data: {'title': title, 'isArchived': isArchived},
+      ),
+    );
+    return DocumentView.fromJson(_asMap(data));
+  }
+
+  Future<List<DocumentSummary>> getDocumentVersions(String id) async {
+    final data = await _guard(() => _dio.get('/api/documents/$id/versions'));
+    return _asList(data)
+        .map((item) => DocumentSummary.fromJson(_asMap(item)))
+        .toList();
   }
 
   /// Downloads the PDF for a document into the given [filePath]. Returns the
@@ -189,12 +257,16 @@ class ApiClient {
   // ---- AI ----
 
   Future<PolishResult> polishClause(PolishClauseRequest request) async {
-    final data = await _guard(() => _dio.post('/api/ai/polish-clause', data: request.toJson()));
+    final data = await _guard(
+      () => _dio.post('/api/ai/polish-clause', data: request.toJson()),
+    );
     return PolishResult.fromJson(_asMap(data));
   }
 
   Future<PolishResult> polishDocument(PolishDocumentRequest request) async {
-    final data = await _guard(() => _dio.post('/api/ai/polish-document', data: request.toJson()));
+    final data = await _guard(
+      () => _dio.post('/api/ai/polish-document', data: request.toJson()),
+    );
     return PolishResult.fromJson(_asMap(data));
   }
 
@@ -206,19 +278,28 @@ class ApiClient {
   }
 
   Future<void> updateSetting(String key, String value) async {
-    await _guard(() => _dio.put('/api/admin/settings/$key', data: {'value': value}));
+    await _guard(
+      () => _dio.put('/api/admin/settings/$key', data: {'value': value}),
+    );
   }
 
-  Future<Template> adminUpsertTemplate({String? id, required CreateTemplateRequest request}) async {
-    final data = await _guard(() => _dio.post('/api/admin/templates', data: {
-          'id': ?id,
-          ...request.toJson(),
-        }));
+  Future<Template> adminUpsertTemplate({
+    String? id,
+    required CreateTemplateRequest request,
+  }) async {
+    final data = await _guard(
+      () => _dio.post(
+        '/api/admin/templates',
+        data: {'id': ?id, ...request.toJson()},
+      ),
+    );
     return Template.fromJson(_asMap(data));
   }
 
   Future<List<AiUsageEntry>> listAiUsage({int limit = 50}) async {
-    final data = await _guard(() => _dio.get('/api/admin/ai-usage', queryParameters: {'limit': limit}));
+    final data = await _guard(
+      () => _dio.get('/api/admin/ai-usage', queryParameters: {'limit': limit}),
+    );
     return _asList(data).map((e) => AiUsageEntry.fromJson(_asMap(e))).toList();
   }
 
@@ -240,30 +321,63 @@ class ApiClient {
         e.type == DioExceptionType.connectionTimeout ||
         e.type == DioExceptionType.receiveTimeout ||
         e.type == DioExceptionType.sendTimeout) {
-      return const ApiError(ApiErrorKind.network, 'Cannot reach server. Check the connection settings.');
+      return const ApiError(
+        ApiErrorKind.network,
+        'Cannot reach server. Check the connection settings.',
+      );
     }
     if (status == null) {
-      return ApiError(ApiErrorKind.unknown, message ?? 'Something went wrong.', statusCode: status);
+      return ApiError(
+        ApiErrorKind.unknown,
+        message ?? 'Something went wrong.',
+        statusCode: status,
+      );
     }
     switch (status) {
       case 401:
         onUnauthorized?.call();
-        return ApiError(ApiErrorKind.unauthorized, message ?? 'Session expired. Please log in again.', statusCode: status);
+        return ApiError(
+          ApiErrorKind.unauthorized,
+          message ?? 'Session expired. Please log in again.',
+          statusCode: status,
+        );
       case 403:
-        final kind = (message?.toLowerCase().contains('ai disabled') ?? false) ? ApiErrorKind.aiDisabled : ApiErrorKind.forbidden;
+        final kind = (message?.toLowerCase().contains('ai disabled') ?? false)
+            ? ApiErrorKind.aiDisabled
+            : ApiErrorKind.forbidden;
         return ApiError(kind, message ?? 'Forbidden.', statusCode: status);
       case 404:
-        return ApiError(ApiErrorKind.notFound, message ?? 'Not found.', statusCode: status);
+        return ApiError(
+          ApiErrorKind.notFound,
+          message ?? 'Not found.',
+          statusCode: status,
+        );
       case 400:
       case 409:
       case 413:
-        return ApiError(ApiErrorKind.validation, message ?? 'Invalid request.', statusCode: status);
+        return ApiError(
+          ApiErrorKind.validation,
+          message ?? 'Invalid request.',
+          statusCode: status,
+        );
       case 429:
-        return ApiError(ApiErrorKind.rateLimited, message ?? 'Rate limit reached.', statusCode: status);
+        return ApiError(
+          ApiErrorKind.rateLimited,
+          message ?? 'Rate limit reached.',
+          statusCode: status,
+        );
       case >= 500:
-        return ApiError(ApiErrorKind.server, message ?? 'The server reported an error.', statusCode: status);
+        return ApiError(
+          ApiErrorKind.server,
+          message ?? 'The server reported an error.',
+          statusCode: status,
+        );
       default:
-        return ApiError(ApiErrorKind.unknown, message ?? 'Something went wrong.', statusCode: status);
+        return ApiError(
+          ApiErrorKind.unknown,
+          message ?? 'Something went wrong.',
+          statusCode: status,
+        );
     }
   }
 
@@ -282,5 +396,6 @@ class ApiClient {
     return <String, dynamic>{};
   }
 
-  static List<dynamic> _asList(Object? value) => value is List ? value : const [];
+  static List<dynamic> _asList(Object? value) =>
+      value is List ? value : const [];
 }
