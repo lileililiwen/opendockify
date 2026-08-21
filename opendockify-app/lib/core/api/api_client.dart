@@ -194,6 +194,22 @@ class ApiClient {
     return GenerateResult.fromJson(_asMap(data));
   }
 
+  Future<PreviewResult> previewDocument(GenerateDocumentRequest request) async {
+    final data = await _guard(
+      () => _dio.post('/api/documents/preview', data: request.toJson()),
+    );
+    return PreviewResult.fromJson(_asMap(data));
+  }
+
+  Future<GenerateResult> finalizeDocument(
+    GenerateDocumentRequest request,
+  ) async {
+    final data = await _guard(
+      () => _dio.post('/api/documents/finalize', data: request.toJson()),
+    );
+    return GenerateResult.fromJson(_asMap(data));
+  }
+
   Future<DocumentView> getDocument(String id) async {
     final data = await _guard(() => _dio.get('/api/documents/$id'));
     return DocumentView.fromJson(_asMap(data));

@@ -55,6 +55,28 @@ public static class DocumentEndpoints
             return ToGenerateResult(result);
         });
 
+        group.MapPost("/finalize", async (
+            HttpContext http,
+            GenerateDocumentRequest request,
+            DocumentService documents,
+            CancellationToken ct) =>
+        {
+            var command = new GenerateCommand(request.TemplateId, request.Values, request.SelectedClauseIds);
+            var result = await documents.GenerateAsync(CurrentUserId(http), command, ct);
+            return ToGenerateResult(result);
+        });
+
+        group.MapPost("/preview", async (
+            HttpContext http,
+            GenerateDocumentRequest request,
+            DocumentService documents,
+            CancellationToken ct) =>
+        {
+            var command = new GenerateCommand(request.TemplateId, request.Values, request.SelectedClauseIds);
+            var result = await documents.PreviewAsync(CurrentUserId(http), command, ct);
+            return ToPreviewResult(result);
+        });
+
         group.MapGet("/{id:guid}", async (
             HttpContext http,
             Guid id,
@@ -167,6 +189,26 @@ public static class DocumentEndpoints
             GenerationErrorKind.Forbidden => Results.Json(new { error = result.Error }, statusCode: StatusCodes.Status403Forbidden),
             GenerationErrorKind.Validation => Results.Json(new { error = result.Error }, statusCode: StatusCodes.Status400BadRequest),
             GenerationErrorKind.RenderError => Results.Json(new { error = result.Error }, statusCode: StatusCodes.Status500InternalServerError),
+            _ => Results.StatusCode(StatusCodes.Status500InternalServerError),
+        };
+    }
+
+    private static IResult ToPreviewResult(DocumentPreviewResult result)
+    {
+        return result.ErrorKind switch
+        {
+            GenerationErrorKind.None => Results.Ok(new
+            {
+                result.TemplateName,
+                result.RenderedText,
+                result.Warnings,
+            }),
+            GenerationErrorKind.NotFound => Results.Json(
+                new { error = result.Error }, statusCode: StatusCodes.Status404NotFound),
+            GenerationErrorKind.Forbidden => Results.Json(
+                new { error = result.Error }, statusCode: StatusCodes.Status403Forbidden),
+            GenerationErrorKind.Validation => Results.Json(
+                new { error = result.Error }, statusCode: StatusCodes.Status400BadRequest),
             _ => Results.StatusCode(StatusCodes.Status500InternalServerError),
         };
     }

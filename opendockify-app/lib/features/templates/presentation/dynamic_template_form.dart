@@ -13,12 +13,17 @@ class DynamicTemplateForm extends StatefulWidget {
     this.riskNoticeText,
     this.initialValues = const {},
     this.initialClauseIds = const {},
+    this.onDraftChanged,
   });
 
   final TemplateDefinition definition;
   final String? riskNoticeText;
   final Map<String, String> initialValues;
   final Set<String> initialClauseIds;
+  final void Function(
+    ({Map<String, String> values, List<String> selectedClauseIds}) snapshot,
+  )?
+  onDraftChanged;
 
   @override
   State<DynamicTemplateForm> createState() => DynamicTemplateFormState();
@@ -36,7 +41,9 @@ class DynamicTemplateFormState extends State<DynamicTemplateForm> {
     super.initState();
     _controllers = {
       for (final field in widget.definition.fields)
-        field.name: TextEditingController(text: widget.initialValues[field.name] ?? ''),
+        field.name: TextEditingController(
+          text: widget.initialValues[field.name] ?? '',
+        ),
     };
     _selectedClauseIds = {...widget.initialClauseIds};
   }
@@ -53,8 +60,14 @@ class DynamicTemplateFormState extends State<DynamicTemplateForm> {
   /// fails; otherwise returns the values map and selected clause ids.
   ({Map<String, String> values, List<String> selectedClauseIds})? submit() {
     if (!_formKey.currentState!.validate()) return null;
+    return snapshot();
+  }
+
+  /// Collects current input without validation so incomplete work can autosave.
+  ({Map<String, String> values, List<String> selectedClauseIds}) snapshot() {
     final values = <String, String>{
-      for (final field in widget.definition.fields) field.name: _controllers[field.name]!.text.trim(),
+      for (final field in widget.definition.fields)
+        field.name: _controllers[field.name]!.text.trim(),
     };
     return (
       values: values,
@@ -63,6 +76,10 @@ class DynamicTemplateFormState extends State<DynamicTemplateForm> {
           .map((c) => c.id)
           .toList(),
     );
+  }
+
+  void _notifyDraftChanged() {
+    widget.onDraftChanged?.call(snapshot());
   }
 
   void setSubmitting(bool value) {
@@ -76,7 +93,8 @@ class DynamicTemplateFormState extends State<DynamicTemplateForm> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (widget.riskNoticeText != null && widget.riskNoticeText!.isNotEmpty) ...[
+          if (widget.riskNoticeText != null &&
+              widget.riskNoticeText!.isNotEmpty) ...[
             WarningBanner(message: widget.riskNoticeText!),
             const SizedBox(height: 8),
           ],
@@ -88,23 +106,35 @@ class DynamicTemplateFormState extends State<DynamicTemplateForm> {
             const Divider(),
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
-              child: Text('Optional clauses', style: TextStyle(fontWeight: FontWeight.bold)),
+              child: Text(
+                'Optional clauses',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
             ),
             for (final clause in widget.definition.clauses)
               CheckboxListTile(
                 contentPadding: EdgeInsets.zero,
                 title: Text(clause.title),
-                subtitle: clause.text.isEmpty ? null : Text(clause.text, maxLines: 2, overflow: TextOverflow.ellipsis),
+                subtitle: clause.text.isEmpty
+                    ? null
+                    : Text(
+                        clause.text,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                 value: _selectedClauseIds.contains(clause.id),
                 onChanged: _submitting
                     ? null
-                    : (value) => setState(() {
+                    : (value) {
+                        setState(() {
                           if (value ?? false) {
                             _selectedClauseIds.add(clause.id);
                           } else {
                             _selectedClauseIds.remove(clause.id);
                           }
-                        }),
+                        });
+                        _notifyDraftChanged();
+                      },
               ),
           ],
         ],
@@ -119,6 +149,7 @@ class DynamicTemplateFormState extends State<DynamicTemplateForm> {
           field: field,
           controller: _controllers[field.name]!,
           enabled: !_submitting,
+          onChanged: _notifyDraftChanged,
         );
       case FieldType.number:
       case FieldType.currency:
@@ -127,6 +158,7 @@ class DynamicTemplateFormState extends State<DynamicTemplateForm> {
           controller: _controllers[field.name]!,
           isCurrency: field.type == FieldType.currency,
           enabled: !_submitting,
+          onChanged: (_) => _notifyDraftChanged(),
         );
       case FieldType.text:
         return TextFormField(
@@ -137,6 +169,7 @@ class DynamicTemplateFormState extends State<DynamicTemplateForm> {
             prefixText: field.required ? '* ' : null,
           ),
           validator: (value) => _validateField(field, value),
+          onChanged: (_) => _notifyDraftChanged(),
         );
     }
   }
@@ -157,28 +190,44 @@ class DynamicTemplateFormState extends State<DynamicTemplateForm> {
         if (rule?.maxLength != null && value.length > rule!.maxLength!) {
           return '${field.label} must be at most ${rule.maxLength} characters.';
         }
-        if (rule?.pattern != null && value.isNotEmpty && !RegExp(rule!.pattern!).hasMatch(value)) {
+        if (rule?.pattern != null &&
+            value.isNotEmpty &&
+            !RegExp(rule!.pattern!).hasMatch(value)) {
           return '${field.label} has an invalid format.';
         }
         return null;
       case FieldType.number:
       case FieldType.currency:
         final numValue = num.tryParse(value);
-        if (numValue == null) return '${field.label} must be a number.';
-        if (rule?.nonNegative == true && numValue < 0) return '${field.label} must not be negative.';
-        if (rule?.min != null && numValue < rule!.min!) return '${field.label} must be at least ${rule.min}.';
-        if (rule?.max != null && numValue > rule!.max!) return '${field.label} must be at most ${rule.max}.';
+        if (numValue == null) {
+          return '${field.label} must be a number.';
+        }
+        if (rule?.nonNegative == true && numValue < 0) {
+          return '${field.label} must not be negative.';
+        }
+        if (rule?.min != null && numValue < rule!.min!) {
+          return '${field.label} must be at least ${rule.min}.';
+        }
+        if (rule?.max != null && numValue > rule!.max!) {
+          return '${field.label} must be at most ${rule.max}.';
+        }
         return null;
       case FieldType.date:
         final date = DateTime.tryParse(value);
-        if (date == null) return '${field.label} must be a valid date (yyyy-MM-dd).';
+        if (date == null) {
+          return '${field.label} must be a valid date (yyyy-MM-dd).';
+        }
         if (rule?.dateFrom != null) {
           final from = DateTime.tryParse(rule!.dateFrom!);
-          if (from != null && date.isBefore(from)) return '${field.label} must not be before ${rule.dateFrom}.';
+          if (from != null && date.isBefore(from)) {
+            return '${field.label} must not be before ${rule.dateFrom}.';
+          }
         }
         if (rule?.dateTo != null) {
           final to = DateTime.tryParse(rule!.dateTo!);
-          if (to != null && date.isAfter(to)) return '${field.label} must not be after ${rule.dateTo}.';
+          if (to != null && date.isAfter(to)) {
+            return '${field.label} must not be after ${rule.dateTo}.';
+          }
         }
         return null;
     }
@@ -186,24 +235,35 @@ class DynamicTemplateFormState extends State<DynamicTemplateForm> {
 }
 
 class _NumberField extends StatelessWidget {
-  const _NumberField({required this.field, required this.controller, required this.isCurrency, required this.enabled});
+  const _NumberField({
+    required this.field,
+    required this.controller,
+    required this.isCurrency,
+    required this.enabled,
+    required this.onChanged,
+  });
 
   final FieldDefinition field;
   final TextEditingController controller;
   final bool isCurrency;
   final bool enabled;
+  final ValueChanged<String> onChanged;
 
   @override
   Widget build(BuildContext context) {
     return TextFormField(
       controller: controller,
       enabled: enabled,
-      keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+      keyboardType: const TextInputType.numberWithOptions(
+        decimal: true,
+        signed: true,
+      ),
       decoration: InputDecoration(
         labelText: field.label,
         prefixText: isCurrency ? '¥ ' : (field.required ? '* ' : null),
       ),
       validator: (value) => _validateNumber(field, value),
+      onChanged: onChanged,
     );
   }
 
@@ -213,21 +273,35 @@ class _NumberField extends StatelessWidget {
       return field.required ? '${field.label} is required.' : null;
     }
     final numValue = num.tryParse(value);
-    if (numValue == null) return '${field.label} must be a number.';
+    if (numValue == null) {
+      return '${field.label} must be a number.';
+    }
     final rule = field.validation;
-    if (rule?.nonNegative == true && numValue < 0) return '${field.label} must not be negative.';
-    if (rule?.min != null && numValue < rule!.min!) return '${field.label} must be at least ${rule.min}.';
-    if (rule?.max != null && numValue > rule!.max!) return '${field.label} must be at most ${rule.max}.';
+    if (rule?.nonNegative == true && numValue < 0) {
+      return '${field.label} must not be negative.';
+    }
+    if (rule?.min != null && numValue < rule!.min!) {
+      return '${field.label} must be at least ${rule.min}.';
+    }
+    if (rule?.max != null && numValue > rule!.max!) {
+      return '${field.label} must be at most ${rule.max}.';
+    }
     return null;
   }
 }
 
 class _DateField extends StatefulWidget {
-  const _DateField({required this.field, required this.controller, required this.enabled});
+  const _DateField({
+    required this.field,
+    required this.controller,
+    required this.enabled,
+    required this.onChanged,
+  });
 
   final FieldDefinition field;
   final TextEditingController controller;
   final bool enabled;
+  final VoidCallback onChanged;
 
   @override
   State<_DateField> createState() => _DateFieldState();
@@ -243,10 +317,12 @@ class _DateFieldState extends State<_DateField> {
       lastDate: DateTime(2100),
     );
     if (picked != null) {
-      final formatted = '${picked.year.toString().padLeft(4, '0')}-'
+      final formatted =
+          '${picked.year.toString().padLeft(4, '0')}-'
           '${picked.month.toString().padLeft(2, '0')}-'
           '${picked.day.toString().padLeft(2, '0')}';
       widget.controller.text = formatted;
+      widget.onChanged();
     }
   }
 
@@ -272,15 +348,21 @@ class _DateFieldState extends State<_DateField> {
       return field.required ? '${field.label} is required.' : null;
     }
     final date = DateTime.tryParse(value);
-    if (date == null) return '${field.label} must be a valid date.';
+    if (date == null) {
+      return '${field.label} must be a valid date.';
+    }
     final rule = field.validation;
     if (rule?.dateFrom != null) {
       final from = DateTime.tryParse(rule!.dateFrom!);
-      if (from != null && date.isBefore(from)) return '${field.label} must not be before ${rule.dateFrom}.';
+      if (from != null && date.isBefore(from)) {
+        return '${field.label} must not be before ${rule.dateFrom}.';
+      }
     }
     if (rule?.dateTo != null) {
       final to = DateTime.tryParse(rule!.dateTo!);
-      if (to != null && date.isAfter(to)) return '${field.label} must not be after ${rule.dateTo}.';
+      if (to != null && date.isAfter(to)) {
+        return '${field.label} must not be after ${rule.dateTo}.';
+      }
     }
     return null;
   }

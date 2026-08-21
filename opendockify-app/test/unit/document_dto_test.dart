@@ -87,6 +87,50 @@ void main() {
     });
   });
 
+  group('PreviewResult.fromJson', () {
+    test('parses rendered text and warnings without document identity', () {
+      final preview = PreviewResult.fromJson(const {
+        'templateName': 'Loan IOU',
+        'renderedText': 'Preview text',
+        'warnings': ['Rate warning'],
+      });
+      expect(preview.templateName, 'Loan IOU');
+      expect(preview.renderedText, 'Preview text');
+      expect(preview.warnings, ['Rate warning']);
+    });
+  });
+
+  group('LocalDocumentDraft', () {
+    test('round trips values, clauses and timestamp', () {
+      final draft = LocalDocumentDraft(
+        values: const {'amount': '1000'},
+        selectedClauseIds: const ['cl1'],
+        updatedAt: DateTime.utc(2026, 1, 1),
+      );
+      final restored = LocalDocumentDraft.fromJson(draft.toJson());
+      expect(restored.values, {'amount': '1000'});
+      expect(restored.selectedClauseIds, ['cl1']);
+      expect(restored.updatedAt, DateTime.utc(2026, 1, 1));
+    });
+
+    test('storage keys isolate users and form identities', () {
+      final first = DraftStorageKey.forForm(
+        userId: 'user-a',
+        formId: 'template-1',
+      );
+      final secondUser = DraftStorageKey.forForm(
+        userId: 'user-b',
+        formId: 'template-1',
+      );
+      final secondForm = DraftStorageKey.forForm(
+        userId: 'user-a',
+        formId: 'template-2',
+      );
+      expect(first, isNot(secondUser));
+      expect(first, isNot(secondForm));
+    });
+  });
+
   group('DocumentView.fromJson', () {
     test('parses snapshot shape used for re-edit', () {
       final doc = DocumentView.fromJson(const {

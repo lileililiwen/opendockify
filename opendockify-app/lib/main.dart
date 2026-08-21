@@ -6,6 +6,7 @@ import 'core/providers.dart';
 import 'core/routing/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/data/secure_token_store.dart';
+import 'features/documents/data/secure_draft_store.dart';
 import 'core/config/app_config.dart';
 
 Future<void> main() async {
@@ -13,10 +14,18 @@ Future<void> main() async {
   final container = ProviderContainer(
     overrides: [
       tokenStoreProvider.overrideWithValue(SecureTokenStore()),
-      appConfigStoreProvider.overrideWithValue(AppConfigStore(SharedPreferencesAsync())),
+      appConfigStoreProvider.overrideWithValue(
+        AppConfigStore(SharedPreferencesAsync()),
+      ),
+      draftStoreProvider.overrideWithValue(SecureDraftStore()),
     ],
   );
-  runApp(UncontrolledProviderScope(container: container, child: const OpenDockifyApp()));
+  runApp(
+    UncontrolledProviderScope(
+      container: container,
+      child: const OpenDockifyApp(),
+    ),
+  );
 }
 
 class OpenDockifyApp extends ConsumerWidget {

@@ -28,7 +28,9 @@ Widget _wrap(Widget child) {
 /// Sets the text of a form field by label. Works for the read-only date field
 /// too because it writes to the field's own controller.
 Future<void> _setField(WidgetTester tester, String label, String text) async {
-  final field = tester.widget<TextFormField>(find.widgetWithText(TextFormField, label));
+  final field = tester.widget<TextFormField>(
+    find.widgetWithText(TextFormField, label),
+  );
   field.controller!.text = text;
   await tester.pump();
 }
@@ -38,14 +40,18 @@ void main() {
 
   testWidgets('rejects empty required fields', (tester) async {
     await tester.pumpWidget(_wrap(DynamicTemplateForm(definition: definition)));
-    final state = tester.state<DynamicTemplateFormState>(find.byType(DynamicTemplateForm));
+    final state = tester.state<DynamicTemplateFormState>(
+      find.byType(DynamicTemplateForm),
+    );
     expect(state.submit(), isNull);
     await tester.pump();
     expect(find.text('Amount is required.'), findsOneWidget);
     expect(find.text('Title is required.'), findsOneWidget);
   });
 
-  testWidgets('collects values and selected clauses on valid submit', (tester) async {
+  testWidgets('collects values and selected clauses on valid submit', (
+    tester,
+  ) async {
     await tester.pumpWidget(_wrap(DynamicTemplateForm(definition: definition)));
 
     await _setField(tester, 'Amount', '1000.50');
@@ -56,7 +62,9 @@ void main() {
     await tester.tap(find.text('Force majeure'));
     await tester.pump();
 
-    final state = tester.state<DynamicTemplateFormState>(find.byType(DynamicTemplateForm));
+    final state = tester.state<DynamicTemplateFormState>(
+      find.byType(DynamicTemplateForm),
+    );
     final result = state.submit();
     expect(result, isNotNull);
     expect(result!.values['amount'], '1000.50');
@@ -70,7 +78,9 @@ void main() {
     await tester.pumpWidget(_wrap(DynamicTemplateForm(definition: definition)));
     await _setField(tester, 'Amount', 'abc');
     await _setField(tester, 'Title', 'X');
-    final state = tester.state<DynamicTemplateFormState>(find.byType(DynamicTemplateForm));
+    final state = tester.state<DynamicTemplateFormState>(
+      find.byType(DynamicTemplateForm),
+    );
     expect(state.submit(), isNull);
     await tester.pump();
     expect(find.text('Amount must be a number.'), findsOneWidget);
@@ -80,7 +90,9 @@ void main() {
     await tester.pumpWidget(_wrap(DynamicTemplateForm(definition: definition)));
     await _setField(tester, 'Amount', '-5');
     await _setField(tester, 'Title', 'X');
-    final state = tester.state<DynamicTemplateFormState>(find.byType(DynamicTemplateForm));
+    final state = tester.state<DynamicTemplateFormState>(
+      find.byType(DynamicTemplateForm),
+    );
     expect(state.submit(), isNull);
     await tester.pump();
     expect(find.text('Amount must not be negative.'), findsOneWidget);
@@ -91,7 +103,9 @@ void main() {
     await _setField(tester, 'Amount', '100');
     await _setField(tester, 'Rate', '99');
     await _setField(tester, 'Title', 'OK');
-    final state = tester.state<DynamicTemplateFormState>(find.byType(DynamicTemplateForm));
+    final state = tester.state<DynamicTemplateFormState>(
+      find.byType(DynamicTemplateForm),
+    );
     expect(state.submit(), isNull);
     await tester.pump();
     expect(find.text('Rate must be at most 20.'), findsOneWidget);
@@ -102,22 +116,55 @@ void main() {
     await _setField(tester, 'Amount', '100');
     await _setField(tester, 'Title', 'OK');
     await _setField(tester, 'Start date', 'not-a-date');
-    final state = tester.state<DynamicTemplateFormState>(find.byType(DynamicTemplateForm));
+    final state = tester.state<DynamicTemplateFormState>(
+      find.byType(DynamicTemplateForm),
+    );
     expect(state.submit(), isNull);
     await tester.pump();
     expect(find.text('Start date must be a valid date.'), findsOneWidget);
   });
 
   testWidgets('prefills initial values and clause selection', (tester) async {
-    await tester.pumpWidget(_wrap(DynamicTemplateForm(
-      definition: definition,
-      initialValues: const {'amount': '500', 'title': 'Prefilled'},
-      initialClauseIds: const {'cl2'},
-    )));
-    final state = tester.state<DynamicTemplateFormState>(find.byType(DynamicTemplateForm));
+    await tester.pumpWidget(
+      _wrap(
+        DynamicTemplateForm(
+          definition: definition,
+          initialValues: const {'amount': '500', 'title': 'Prefilled'},
+          initialClauseIds: const {'cl2'},
+        ),
+      ),
+    );
+    final state = tester.state<DynamicTemplateFormState>(
+      find.byType(DynamicTemplateForm),
+    );
     final result = state.submit();
     expect(result!.values['amount'], '500');
     expect(result.values['title'], 'Prefilled');
     expect(result.selectedClauseIds, ['cl2']);
+  });
+
+  testWidgets('emits raw draft snapshots without requiring valid form', (
+    tester,
+  ) async {
+    ({Map<String, String> values, List<String> selectedClauseIds})? latest;
+    await tester.pumpWidget(
+      _wrap(
+        DynamicTemplateForm(
+          definition: definition,
+          onDraftChanged: (snapshot) => latest = snapshot,
+        ),
+      ),
+    );
+
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Title'),
+      'Draft title',
+    );
+    await tester.tap(find.text('Force majeure'));
+    await tester.pump();
+
+    expect(latest, isNotNull);
+    expect(latest!.values['title'], 'Draft title');
+    expect(latest!.selectedClauseIds, ['cl1']);
   });
 }

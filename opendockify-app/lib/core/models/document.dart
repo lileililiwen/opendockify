@@ -158,3 +158,65 @@ class GenerateResult {
     );
   }
 }
+
+class PreviewResult {
+  const PreviewResult({
+    required this.templateName,
+    required this.renderedText,
+    this.warnings = const [],
+  });
+
+  final String templateName;
+  final String renderedText;
+  final List<String> warnings;
+
+  factory PreviewResult.fromJson(Map<String, dynamic> json) => PreviewResult(
+    templateName: json['templateName']?.toString() ?? '',
+    renderedText: json['renderedText']?.toString() ?? '',
+    warnings: (json['warnings'] is List ? json['warnings'] as List : const [])
+        .whereType<String>()
+        .toList(),
+  );
+}
+
+class LocalDocumentDraft {
+  const LocalDocumentDraft({
+    required this.values,
+    required this.selectedClauseIds,
+    required this.updatedAt,
+  });
+
+  final Map<String, String> values;
+  final List<String> selectedClauseIds;
+  final DateTime updatedAt;
+
+  Map<String, dynamic> toJson() => {
+    'values': values,
+    'selectedClauseIds': selectedClauseIds,
+    'updatedAt': updatedAt.toUtc().toIso8601String(),
+  };
+
+  factory LocalDocumentDraft.fromJson(Map<String, dynamic> json) {
+    final values = json['values'];
+    final clauses = json['selectedClauseIds'];
+    return LocalDocumentDraft(
+      values: values is Map
+          ? values.map(
+              (key, value) => MapEntry(key.toString(), value?.toString() ?? ''),
+            )
+          : const {},
+      selectedClauseIds: clauses is List
+          ? clauses.whereType<String>().toList()
+          : const [],
+      updatedAt:
+          DateTime.tryParse(json['updatedAt']?.toString() ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+    );
+  }
+}
+
+abstract final class DraftStorageKey {
+  static String forForm({required String userId, required String formId}) {
+    return 'document_draft_${userId}_$formId';
+  }
+}

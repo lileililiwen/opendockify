@@ -39,6 +39,27 @@ public sealed record GenerateResult(
     }
 }
 
+public sealed record DocumentPreviewResult(
+    string? RenderedText,
+    string? TemplateName,
+    IReadOnlyList<string> Warnings,
+    GenerationErrorKind ErrorKind,
+    string? Error)
+{
+    public static DocumentPreviewResult Success(
+        string renderedText,
+        string templateName,
+        IReadOnlyList<string> warnings)
+    {
+        return new DocumentPreviewResult(renderedText, templateName, warnings, GenerationErrorKind.None, null);
+    }
+
+    public static DocumentPreviewResult Failure(GenerationErrorKind kind, string error)
+    {
+        return new DocumentPreviewResult(null, null, [], kind, error);
+    }
+}
+
 public sealed record GenerateCommand(
     Guid TemplateId,
     Dictionary<string, string> Values,
@@ -120,43 +141,20 @@ public sealed class DocumentService(
         GenerateCommand command,
         CancellationToken cancellationToken = default)
     {
-        var templateResult = await templateService.GetByIdAsync(userId, command.TemplateId, cancellationToken);
-        if (templateResult.NotFound)
+        var preview = await PreviewAsync(userId, command, cancellationToken);
+        if (preview.ErrorKind != GenerationErrorKind.None)
         {
-            return GenerateResult.Failure(GenerationErrorKind.NotFound, "Template not found.");
+            return GenerateResult.Failure(preview.ErrorKind, preview.Error ?? "Preview failed.");
         }
 
-        var template = templateResult.Value!;
-        var definitionValidation = TemplateDefinitionValidator.Validate(template.DefinitionJson, template.Body);
-        if (definitionValidation.Error is not null)
-        {
-            return GenerateResult.Failure(GenerationErrorKind.Validation, definitionValidation.Error);
-        }
-
-        var definition = definitionValidation.Definition!;
-        var validationErrors = ValidateValues(definition, command);
-        var warnings = new List<string>();
-
-        if (validationErrors.Count > 0)
-        {
-            return GenerateResult.Failure(GenerationErrorKind.Validation, string.Join(" ", validationErrors));
-        }
-
-        await CollectInterestWarningsAsync(definition, command.Values, warnings, cancellationToken);
-
-        var render = TemplateRenderer.Render(definition, template.Body, command.Values, command.SelectedClauseIds);
-        if (render.Text is null)
-        {
-            return GenerateResult.Failure(GenerationErrorKind.Validation, render.Error ?? "Rendering failed.");
-        }
-
-        var fullText = AppendRiskNotice(render.Text, template.RiskNoticeText);
+        var fullText = preview.RenderedText!;
+        var templateName = preview.TemplateName!;
         var document = new Document
         {
             Id = Guid.NewGuid(),
             OwnerId = userId,
-            TemplateId = template.Id,
-            Title = template.Name,
+            TemplateId = command.TemplateId,
+            Title = templateName,
             IsArchived = false,
             Status = DocumentStatus.Generated,
             SnapshotJson = SerializeSnapshot(command),
@@ -179,7 +177,50 @@ public sealed class DocumentService(
         db.Set<Document>().Add(document);
         await db.SaveChangesAsync(cancellationToken);
 
-        return GenerateResult.Success(document, template.Name, warnings);
+        return GenerateResult.Success(document, templateName, preview.Warnings);
+    }
+
+    /// <summary>
+    /// Runs the authoritative access, validation, warning, and text-rendering
+    /// pipeline without creating a PDF or persistent document.
+    /// </summary>
+    public async Task<DocumentPreviewResult> PreviewAsync(
+        Guid userId,
+        GenerateCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        var templateResult = await templateService.GetByIdAsync(userId, command.TemplateId, cancellationToken);
+        if (templateResult.NotFound)
+        {
+            return DocumentPreviewResult.Failure(GenerationErrorKind.NotFound, "Template not found.");
+        }
+
+        var template = templateResult.Value!;
+        var definitionValidation = TemplateDefinitionValidator.Validate(template.DefinitionJson, template.Body);
+        if (definitionValidation.Error is not null)
+        {
+            return DocumentPreviewResult.Failure(GenerationErrorKind.Validation, definitionValidation.Error);
+        }
+
+        var definition = definitionValidation.Definition!;
+        var validationErrors = ValidateValues(definition, command);
+        var warnings = new List<string>();
+
+        if (validationErrors.Count > 0)
+        {
+            return DocumentPreviewResult.Failure(GenerationErrorKind.Validation, string.Join(" ", validationErrors));
+        }
+
+        await CollectInterestWarningsAsync(definition, command.Values, warnings, cancellationToken);
+
+        var render = TemplateRenderer.Render(definition, template.Body, command.Values, command.SelectedClauseIds);
+        if (render.Text is null)
+        {
+            return DocumentPreviewResult.Failure(GenerationErrorKind.Validation, render.Error ?? "Rendering failed.");
+        }
+
+        var fullText = AppendRiskNotice(render.Text, template.RiskNoticeText);
+        return DocumentPreviewResult.Success(fullText, template.Name, warnings);
     }
 
     /// <summary>

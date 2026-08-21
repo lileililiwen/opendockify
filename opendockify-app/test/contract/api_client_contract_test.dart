@@ -134,6 +134,28 @@ void main() {
     expect(body['selectedClauseIds'], ['cl1']);
   });
 
+  test('previewDocument posts snapshot without finalizing', () async {
+    final preview = await client.previewDocument(
+      const GenerateDocumentRequest(
+        templateId: 't1',
+        values: {'amount': '1000'},
+      ),
+    );
+    expect(preview.renderedText, 'Preview');
+    expect(adapter.requests.last.path, '/api/documents/preview');
+  });
+
+  test('finalizeDocument uses explicit finalization route', () async {
+    final result = await client.finalizeDocument(
+      const GenerateDocumentRequest(
+        templateId: 't1',
+        values: {'amount': '1000'},
+      ),
+    );
+    expect(result.document.id, 'd1');
+    expect(adapter.requests.last.path, '/api/documents/finalize');
+  });
+
   test('settings returns SettingView list', () async {
     final settings = await client.getSettings();
     expect(settings.single.key, 'Ai:Enabled');
@@ -215,6 +237,7 @@ void adapterResponds(FakeAdapter a) {
           'totalPages': 0,
         };
       case '/api/documents/generate':
+      case '/api/documents/finalize':
         return {
           'document': {
             'id': 'd1',
@@ -224,6 +247,12 @@ void adapterResponds(FakeAdapter a) {
             'snapshotJson': '{"values":{}}',
             'renderedText': 'Rendered',
           },
+          'warnings': [],
+        };
+      case '/api/documents/preview':
+        return {
+          'templateName': 'Loan IOU',
+          'renderedText': 'Preview',
           'warnings': [],
         };
       case '/api/documents/d1/metadata':

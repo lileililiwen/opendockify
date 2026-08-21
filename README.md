@@ -31,9 +31,10 @@ shown in the application UI.
   NDA, Outsourcing Service, Part-time/Labor Agreement, Repayment Confirmation,
   and Simple Demand Letter. Built-ins are read-only; copy them to make private
   editable versions.
-- **Document generation** — fill the form → validate → render full text with
-  the risk notice → export PDF → keep an immutable history (re-editing creates
-  a new record). The document library supports titles, template-aware search,
+- **Document generation** — secure local drafts survive interruptions; preview
+  validates and renders without saving a document, while explicit finalization
+  exports the PDF and keeps an immutable history (re-editing creates a new
+  record). The document library supports titles, template-aware search,
   active/archived filters, deterministic sorting, and connected version history.
 - **Chinese finance features** — currency fields render as RMB-uppercase
   (中文大写); annual interest rates are validated against the LPR reference with
