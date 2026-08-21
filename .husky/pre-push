@@ -2,4 +2,7 @@
 . "$(dirname "$0")/_/husky.sh"
 
 # Fast local build gate before pushing; same warnings-as-errors setting as CI.
-dotnet build OpenDockify.sln --no-restore /warnaserror
+# Serialize MSBuild and avoid persistent build servers so the full solution is
+# reliable across local SDK installations and constrained development shells.
+dotnet build OpenDockify.sln --no-restore /warnaserror \
+  --maxcpucount:1 --disable-build-servers
