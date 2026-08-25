@@ -13,6 +13,7 @@ public sealed class InterviewSessionConfiguration : IEntityTypeConfiguration<Int
         builder.Property(session => session.OwnerId).IsRequired();
         builder.Property(session => session.TemplateId).IsRequired();
         builder.Property(session => session.TemplateRevisionStamp).IsRequired();
+        builder.HasIndex(session => session.TemplateRevisionId);
         builder.Property(session => session.CurrentStepId).HasMaxLength(100).IsRequired();
         builder.Property(session => session.AnswersJson).HasMaxLength(100_000).IsRequired();
         builder.Property(session => session.SelectedClauseIdsJson).HasMaxLength(10_000).IsRequired();

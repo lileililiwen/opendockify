@@ -162,6 +162,61 @@ class ApiClient {
     return Template.fromJson(_asMap(data));
   }
 
+  Future<List<int>> exportTemplate(String id) async {
+    final response = await _guard(
+      () => _dio.get<List<int>>(
+        '/api/templates/$id/export',
+        options: Options(responseType: ResponseType.bytes),
+      ),
+    );
+    return List<int>.from(response as List);
+  }
+
+  Future<List<TemplateRevision>> listTemplateRevisions(String id) async {
+    final data = await _guard(() => _dio.get('/api/templates/$id/revisions'));
+    return _asList(data)
+        .map((e) => TemplateRevision.fromJson(_asMap(e)))
+        .toList();
+  }
+
+  Future<Template> rollbackTemplate(String id, int revision) async {
+    final data = await _guard(
+      () => _dio.post('/api/templates/$id/revisions/$revision/rollback'),
+    );
+    return Template.fromJson(_asMap(data));
+  }
+
+  Future<PackageValidation> validateTemplatePackage(List<int> bytes) async {
+    final data = await _guard(
+      () => _dio.post(
+        '/api/admin/templates/packages/validate',
+        data: bytes,
+        options: Options(
+          contentType: 'application/vnd.opendockify.template+json',
+        ),
+      ),
+    );
+    return PackageValidation.fromJson(_asMap(data));
+  }
+
+  Future<Template> importTemplatePackage(
+    List<int> bytes,
+    String receipt,
+    String policy,
+  ) async {
+    final data = await _guard(
+      () => _dio.post(
+        '/api/admin/templates/packages/import',
+        data: bytes,
+        queryParameters: {'receipt': receipt, 'policy': policy},
+        options: Options(
+          contentType: 'application/vnd.opendockify.template+json',
+        ),
+      ),
+    );
+    return Template.fromJson(_asMap(data));
+  }
+
   // ---- Guided interviews ----
 
   Future<InterviewResponse> createInterview(String templateId) async {

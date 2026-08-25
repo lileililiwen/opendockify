@@ -79,6 +79,21 @@ public static class TemplateEndpoints
             return ToResult(result, StatusCodes.Status201Created);
         });
 
+        group.MapGet("/{id:guid}/export", async (HttpContext http, Guid id, TemplatePackageService packages, CancellationToken ct) =>
+        {
+            var (bytes, error) = await packages.ExportAsync(CurrentUserId(http), id, ct);
+            return bytes is null ? Results.NotFound(new { error }) : Results.File(bytes, "application/vnd.opendockify.template+json", $"template-{id}.json");
+        });
+
+        group.MapGet("/{id:guid}/revisions", async (HttpContext http, Guid id, TemplateService templates, CancellationToken ct) =>
+        {
+            var revisions = await templates.GetRevisionsAsync(CurrentUserId(http), id, ct);
+            return revisions.Count == 0 ? Results.NotFound() : Results.Ok(revisions);
+        });
+
+        group.MapPost("/{id:guid}/revisions/{revision:int}/rollback", async (HttpContext http, Guid id, int revision, TemplateService templates, CancellationToken ct) =>
+            ToResult(await templates.RollbackAsync(CurrentUserId(http), id, revision, ct)));
+
         return endpoints;
     }
 
@@ -96,12 +111,35 @@ public static class TemplateEndpoints
             return ToResult(result);
         });
 
+        group.MapPost("/packages/validate", async (HttpRequest request, TemplatePackageService packages, CancellationToken ct) =>
+        {
+            var bytes = await ReadPackageAsync(request, ct);
+            var result = await packages.ValidateAsync(bytes, ct);
+            return result.Valid ? Results.Ok(result) : Results.BadRequest(result);
+        });
+
+        group.MapPost("/packages/import", async (HttpContext http, HttpRequest request, string receipt, string policy, TemplatePackageService packages, CancellationToken ct) =>
+        {
+            var bytes = await ReadPackageAsync(request, ct);
+            var result = await packages.ImportAsync(CurrentUserId(http), bytes, receipt, policy, ct);
+            if (result.Conflict)
+                return Results.Conflict(new { error = result.Error });
+            return result.Template is null ? Results.BadRequest(new { error = result.Error }) : Results.Created($"/api/templates/{result.Template.Id}", ToView(result.Template));
+        });
+
         return endpoints;
     }
 
     private static Guid CurrentUserId(HttpContext http)
     {
         return CurrentUserContextFactory.FromClaims(http.User).UserId;
+    }
+
+    private static async Task<byte[]> ReadPackageAsync(HttpRequest request, CancellationToken ct)
+    {
+        await using var buffer = new MemoryStream();
+        await request.Body.CopyToAsync(buffer, ct);
+        return buffer.Length > TemplatePackageService.MaxPackageBytes ? new byte[TemplatePackageService.MaxPackageBytes + 1] : buffer.ToArray();
     }
 
     private static TemplateDraft ToDraft(CreateTemplateRequest request)
@@ -152,6 +190,10 @@ public static class TemplateEndpoints
             template.IsBuiltIn,
             template.IsPublic,
             template.OwnerId,
+            template.StableId,
+            template.CurrentRevision,
+            template.SourceInstance,
+            template.SourceStableId,
         };
     }
 
@@ -169,6 +211,10 @@ public static class TemplateEndpoints
             template.IsBuiltIn,
             template.IsPublic,
             template.OwnerId,
+            template.StableId,
+            template.CurrentRevision,
+            template.SourceInstance,
+            template.SourceStableId,
             template.CreatedAt,
             template.UpdatedAt,
         };

@@ -32,7 +32,7 @@ public sealed class TemplateSeeder : IDbSeeder
 
         foreach (var data in BuiltInTemplates.All)
         {
-            db.Set<Template>().Add(new Template
+            var template = new Template
             {
                 Id = Guid.NewGuid(),
                 OwnerId = null,
@@ -44,6 +44,19 @@ public sealed class TemplateSeeder : IDbSeeder
                 RiskNoticeText = data.RiskNoticeText,
                 Body = data.Body,
                 DefinitionJson = JsonSerializer.Serialize(data.Definition, TemplateDefinitionValidator.JsonOptions),
+            };
+            db.Set<Template>().Add(template);
+            db.Set<TemplateRevision>().Add(new TemplateRevision
+            {
+                Id = Guid.NewGuid(),
+                TemplateId = template.Id,
+                Revision = 1,
+                Name = template.Name,
+                Category = template.Category,
+                Description = template.Description,
+                RiskNoticeText = template.RiskNoticeText,
+                Body = template.Body,
+                DefinitionJson = template.DefinitionJson,
             });
         }
 

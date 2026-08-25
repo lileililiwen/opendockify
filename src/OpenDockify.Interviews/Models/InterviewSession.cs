@@ -8,6 +8,8 @@ public sealed class InterviewSession
 
     public Guid TemplateId { get; set; }
 
+    public Guid? TemplateRevisionId { get; set; }
+
     public DateTimeOffset TemplateRevisionStamp { get; set; }
 
     public string CurrentStepId { get; set; } = string.Empty;

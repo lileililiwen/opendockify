@@ -18,6 +18,14 @@ class AdminHomeScreen extends StatelessWidget {
             onTap: () => context.push('/admin/settings'),
           ),
           ListTile(
+            leading: const Icon(Icons.import_export),
+            title: const Text('Template packages'),
+            subtitle: const Text(
+              'Validate and import portable template revisions',
+            ),
+            onTap: () => context.push('/admin/templates/import'),
+          ),
+          ListTile(
             leading: const Icon(Icons.description_outlined),
             title: const Text('Global templates'),
             subtitle: const Text('Create or update public templates'),

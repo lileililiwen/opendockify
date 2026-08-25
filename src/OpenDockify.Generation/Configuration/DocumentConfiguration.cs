@@ -50,6 +50,7 @@ public sealed class DocumentConfiguration : IEntityTypeConfiguration<Document>
         builder.HasIndex(d => new { d.OwnerId, d.IsArchived, d.CreatedAt });
         builder.HasIndex(d => new { d.OwnerId, d.Title });
         builder.HasIndex(d => d.TemplateId);
+        builder.HasIndex(d => d.TemplateRevisionId);
         builder.HasIndex(d => d.ParentId);
     }
 }
