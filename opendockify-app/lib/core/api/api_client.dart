@@ -384,6 +384,64 @@ class ApiClient {
     }
   }
 
+  Future<List<DocumentShareItem>> listDocumentShares(String id) async {
+    final data = await _guard(() => _dio.get('/api/documents/$id/shares'));
+    return _asList(data)
+        .map((e) => DocumentShareItem.fromJson(_asMap(e)))
+        .toList();
+  }
+
+  Future<void> createDocumentGrant(
+    String id,
+    String username,
+    String accessLevel,
+  ) async {
+    await _guard(
+      () => _dio.post(
+        '/api/documents/$id/shares/grants',
+        data: {'username': username, 'accessLevel': accessLevel},
+      ),
+    );
+  }
+
+  Future<CreatedDocumentShareLink> createDocumentShareLink(
+    String id,
+    int lifetimeHours,
+    bool allowDownload,
+  ) async {
+    final data = await _guard(
+      () => _dio.post(
+        '/api/documents/$id/shares/links',
+        data: {'lifetimeHours': lifetimeHours, 'allowDownload': allowDownload},
+      ),
+    );
+    return CreatedDocumentShareLink.fromJson(_asMap(data));
+  }
+
+  Future<void> revokeDocumentShare(
+    String documentId,
+    DocumentShareItem share,
+  ) async {
+    final segment = share.kind == 'grant' ? 'grants' : 'links';
+    await _guard(
+      () =>
+          _dio.delete('/api/documents/$documentId/shares/$segment/${share.id}'),
+    );
+  }
+
+  Future<List<ShareAuditEntry>> getDocumentShareAudit(String id) async {
+    final data = await _guard(
+      () => _dio.get(
+        '/api/documents/$id/shares/audit',
+        queryParameters: {'page': 1, 'pageSize': 50},
+      ),
+    );
+    final map = _asMap(data);
+    return _asList(map['items'])
+        .map((e) => ShareAuditEntry.fromJson(_asMap(e)))
+        .toList();
+  }
+
   // ---- AI ----
 
   Future<PolishResult> polishClause(PolishClauseRequest request) async {

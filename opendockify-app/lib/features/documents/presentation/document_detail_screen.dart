@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../core/api/api_error.dart';
 import '../../../core/models/document.dart';
@@ -78,47 +80,321 @@ class _DocumentDetailBody extends ConsumerWidget {
           icon: const Icon(Icons.download),
           label: const Text('Download PDF'),
         ),
-        const SizedBox(height: 8),
-        OutlinedButton.icon(
-          onPressed: () => context.push('/documents/${document.id}/reedit'),
-          icon: const Icon(Icons.edit_document),
-          label: const Text('Re-edit (new version)'),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () => _rename(context, ref),
-                icon: const Icon(Icons.drive_file_rename_outline),
-                label: const Text('Rename'),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () => _toggleArchive(context, ref),
-                icon: Icon(
-                  document.isArchived
-                      ? Icons.unarchive_outlined
-                      : Icons.archive_outlined,
+        if (!document.isOwner) ...[
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Chip(label: Text('Shared ${document.accessLevel} access')),
+          ),
+        ],
+        if (document.isOwner) ...[
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () => _showSharing(context, ref),
+            icon: const Icon(Icons.share_outlined),
+            label: const Text('Sharing and access history'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () => context.push('/documents/${document.id}/reedit'),
+            icon: const Icon(Icons.edit_document),
+            label: const Text('Re-edit (new version)'),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _rename(context, ref),
+                  icon: const Icon(Icons.drive_file_rename_outline),
+                  label: const Text('Rename'),
                 ),
-                label: Text(document.isArchived ? 'Restore' : 'Archive'),
               ),
-            ),
-          ],
-        ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _toggleArchive(context, ref),
+                  icon: Icon(
+                    document.isArchived
+                        ? Icons.unarchive_outlined
+                        : Icons.archive_outlined,
+                  ),
+                  label: Text(document.isArchived ? 'Restore' : 'Archive'),
+                ),
+              ),
+            ],
+          ),
+        ],
         const SizedBox(height: 8),
         _buildVersionHistory(context, ref),
         const SizedBox(height: 8),
-        PolishDocumentButton(document: document),
-        const SizedBox(height: 8),
-        OutlinedButton.icon(
-          onPressed: () => _confirmDelete(context, ref),
-          icon: const Icon(Icons.delete_outline),
-          label: const Text('Delete'),
-        ),
+        if (document.isOwner) ...[
+          PolishDocumentButton(document: document),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () => _confirmDelete(context, ref),
+            icon: const Icon(Icons.delete_outline),
+            label: const Text('Delete'),
+          ),
+        ],
       ],
+    );
+  }
+
+  Future<void> _showSharing(BuildContext context, WidgetRef ref) async {
+    var shares = await ref
+        .read(apiClientProvider)
+        .listDocumentShares(document.id);
+    if (!context.mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          Future<void> refresh() async {
+            shares = await ref
+                .read(apiClientProvider)
+                .listDocumentShares(document.id);
+            setDialogState(() {});
+          }
+
+          return AlertDialog(
+            title: const Text('Sharing'),
+            content: SizedBox(
+              width: 520,
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  const Text('Internal grants'),
+                  for (final share in shares.where((x) => x.kind == 'grant'))
+                    ListTile(
+                      title: Text(share.username ?? 'User'),
+                      subtitle: Text(
+                        '${share.accessLevel}${share.revokedAt == null ? '' : ' · revoked'}',
+                      ),
+                      trailing: share.revokedAt == null
+                          ? IconButton(
+                              icon: const Icon(Icons.block),
+                              onPressed: () async {
+                                await ref
+                                    .read(apiClientProvider)
+                                    .revokeDocumentShare(document.id, share);
+                                await refresh();
+                              },
+                            )
+                          : null,
+                    ),
+                  const Divider(),
+                  const Text('External links'),
+                  for (final share in shares.where((x) => x.kind == 'link'))
+                    ListTile(
+                      title: Text(
+                        share.allowDownload == true
+                            ? 'View and download'
+                            : 'View only',
+                      ),
+                      subtitle: Text(
+                        '${share.expiresAt?.toLocal() ?? ''}${share.revokedAt == null ? '' : ' · revoked'}',
+                      ),
+                      trailing: share.revokedAt == null
+                          ? IconButton(
+                              icon: const Icon(Icons.link_off),
+                              onPressed: () async {
+                                await ref
+                                    .read(apiClientProvider)
+                                    .revokeDocumentShare(document.id, share);
+                                await refresh();
+                              },
+                            )
+                          : null,
+                    ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => _showAudit(dialogContext, ref),
+                child: const Text('Access history'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  await _createGrant(dialogContext, ref);
+                  await refresh();
+                },
+                child: const Text('Grant user'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  await _createLink(dialogContext, ref);
+                  await refresh();
+                },
+                child: const Text('Create link'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Close'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _createGrant(BuildContext context, WidgetRef ref) async {
+    final username = TextEditingController();
+    var level = 'view';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Grant document access'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: username,
+                decoration: const InputDecoration(labelText: 'Username'),
+              ),
+              DropdownButtonFormField<String>(
+                initialValue: level,
+                items: const [
+                  DropdownMenuItem(value: 'view', child: Text('View')),
+                  DropdownMenuItem(value: 'review', child: Text('Review')),
+                ],
+                onChanged: (value) => setState(() => level = value ?? level),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Grant'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed == true) {
+      await ref
+          .read(apiClientProvider)
+          .createDocumentGrant(document.id, username.text.trim(), level);
+    }
+    username.dispose();
+  }
+
+  Future<void> _createLink(BuildContext context, WidgetRef ref) async {
+    var hours = 24;
+    var download = false;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Create external link'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<int>(
+                initialValue: hours,
+                items: const [
+                  DropdownMenuItem(value: 1, child: Text('1 hour')),
+                  DropdownMenuItem(value: 24, child: Text('24 hours')),
+                  DropdownMenuItem(value: 72, child: Text('72 hours')),
+                ],
+                onChanged: (value) => setState(() => hours = value ?? hours),
+              ),
+              SwitchListTile(
+                value: download,
+                onChanged: (value) => setState(() => download = value),
+                title: const Text('Allow PDF download'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Create'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    final link = await ref
+        .read(apiClientProvider)
+        .createDocumentShareLink(document.id, hours, download);
+    final url = ref.read(apiClientProvider).absoluteUrl('/s/${link.token}');
+    if (!context.mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Copy this link now'),
+        content: SelectableText(
+          '$url\n\nThe secret cannot be retrieved after this dialog closes.',
+        ),
+        actions: [
+          OutlinedButton.icon(
+            onPressed: () async {
+              await SharePlus.instance.share(ShareParams(text: url));
+              if (context.mounted) Navigator.pop(context);
+            },
+            icon: const Icon(Icons.share_outlined),
+            label: const Text('Share once'),
+          ),
+          FilledButton.icon(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: url));
+              if (context.mounted) Navigator.pop(context);
+            },
+            icon: const Icon(Icons.copy),
+            label: const Text('Copy once'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showAudit(BuildContext context, WidgetRef ref) async {
+    final events = await ref
+        .read(apiClientProvider)
+        .getDocumentShareAudit(document.id);
+    if (!context.mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Access history'),
+        content: SizedBox(
+          width: 480,
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              for (final event in events)
+                ListTile(
+                  leading: Icon(
+                    event.succeeded ? Icons.check_circle_outline : Icons.block,
+                  ),
+                  title: Text(event.action),
+                  subtitle: Text(
+                    '${event.actorCategory} · ${event.createdAt?.toLocal() ?? ''}',
+                  ),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
     );
   }
 

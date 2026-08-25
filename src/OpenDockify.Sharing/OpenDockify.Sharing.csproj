@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.*" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="8.0.*" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\OpenDockify.Auth\OpenDockify.Auth.csproj" />
+    <ProjectReference Include="..\OpenDockify.Generation\OpenDockify.Generation.csproj" />
+    <ProjectReference Include="..\OpenDockify.SystemConfig\OpenDockify.SystemConfig.csproj" />
+    <ProjectReference Include="..\OpenDockify.Templates\OpenDockify.Templates.csproj" />
+  </ItemGroup>
+</Project>

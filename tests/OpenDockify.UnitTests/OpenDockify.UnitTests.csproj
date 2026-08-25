@@ -28,6 +28,7 @@
     <ProjectReference Include="..\..\src\OpenDockify.Templates\OpenDockify.Templates.csproj" />
     <ProjectReference Include="..\..\src\OpenDockify.Auth\OpenDockify.Auth.csproj" />
     <ProjectReference Include="..\..\src\OpenDockify.Data\OpenDockify.Data.csproj" />
+    <ProjectReference Include="..\..\src\OpenDockify.Sharing\OpenDockify.Sharing.csproj" />
   </ItemGroup>
 
 </Project>

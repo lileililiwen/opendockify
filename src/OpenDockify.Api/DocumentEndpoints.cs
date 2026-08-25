@@ -96,6 +96,10 @@ public static class DocumentEndpoints
             DocumentService documents,
             CancellationToken ct) =>
         {
+            if (await IsSharedNonOwnerAsync(http, id, documents, ct))
+            {
+                return Results.Json(new { error = "Only the document owner may modify it." }, statusCode: StatusCodes.Status403Forbidden);
+            }
             var result = await documents.UpdateMetadataAsync(
                 CurrentUserId(http), id, request.Title, request.IsArchived, ct);
             return result.ErrorKind switch
@@ -128,6 +132,10 @@ public static class DocumentEndpoints
             DocumentService documents,
             CancellationToken ct) =>
         {
+            if (await IsSharedNonOwnerAsync(http, id, documents, ct))
+            {
+                return Results.Json(new { error = "Only the document owner may re-edit it." }, statusCode: StatusCodes.Status403Forbidden);
+            }
             var command = new GenerateCommand(request.TemplateId, request.Values, request.SelectedClauseIds);
             var result = await documents.ReEditAsync(CurrentUserId(http), id, command, ct);
             return ToGenerateResult(result);
@@ -161,6 +169,10 @@ public static class DocumentEndpoints
             DocumentService documents,
             CancellationToken ct) =>
         {
+            if (await IsSharedNonOwnerAsync(http, id, documents, ct))
+            {
+                return Results.Json(new { error = "Only the document owner may delete it." }, statusCode: StatusCodes.Status403Forbidden);
+            }
             var result = await documents.DeleteAsync(CurrentUserId(http), id, ct);
             return result.NotFound
                 ? Results.Json(new { error = "Document not found." }, statusCode: StatusCodes.Status404NotFound)
@@ -173,6 +185,12 @@ public static class DocumentEndpoints
     private static Guid CurrentUserId(HttpContext http)
     {
         return CurrentUserContextFactory.FromClaims(http.User).UserId;
+    }
+
+    private static async Task<bool> IsSharedNonOwnerAsync(HttpContext http, Guid id, DocumentService documents, CancellationToken ct)
+    {
+        var access = await documents.GetAsync(CurrentUserId(http), id, ct);
+        return !access.NotFound && !access.Value!.IsOwner;
     }
 
     private static IResult ToGenerateResult(GenerateResult result)
@@ -231,10 +249,10 @@ public static class DocumentEndpoints
 
     private static object ToView(DocumentLibraryDetail detail)
     {
-        return ToView(detail.Document, detail.TemplateName, detail.Title);
+        return ToView(detail.Document, detail.TemplateName, detail.Title, detail.IsOwner, detail.AccessLevel);
     }
 
-    private static object ToView(Document document, string? templateName, string? resolvedTitle = null)
+    private static object ToView(Document document, string? templateName, string? resolvedTitle = null, bool isOwner = true, string accessLevel = "owner")
     {
         return new
         {
@@ -249,6 +267,8 @@ public static class DocumentEndpoints
             document.SnapshotJson,
             document.RenderedText,
             document.CreatedAt,
+            IsOwner = isOwner,
+            AccessLevel = accessLevel,
             downloadUrl = $"/api/documents/{document.Id}/download",
         };
     }

@@ -87,7 +87,9 @@ public sealed record DocumentLibraryItem(
 public sealed record DocumentLibraryDetail(
     Document Document,
     string TemplateName,
-    string Title);
+    string Title,
+    bool IsOwner = true,
+    string AccessLevel = "owner");
 
 public enum DocumentMetadataErrorKind
 {
@@ -133,6 +135,7 @@ public sealed class DocumentService(
     TemplateService templateService,
     IPdfRenderer pdfRenderer,
     InterestRateService interestRateService,
+    IDocumentReadAuthorizer readAuthorizer,
     IConfiguration configuration)
 {
     private static readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
@@ -328,13 +331,21 @@ public sealed class DocumentService(
         Guid id,
         CancellationToken cancellationToken = default)
     {
+        var access = await readAuthorizer.AuthorizeAsync(userId, id, cancellationToken);
+        if (!access.Allowed)
+        {
+            return OwnedResourceResult.Missing<DocumentLibraryDetail>();
+        }
+
         var detail = await (from document in db.Set<Document>()
                             join template in db.Set<Template>() on document.TemplateId equals template.Id
-                            where document.Id == id && document.OwnerId == userId
+                            where document.Id == id
                             select new DocumentLibraryDetail(
                                 document,
                                 template.Name,
-                                document.Title == string.Empty ? template.Name : document.Title))
+                                document.Title == string.Empty ? template.Name : document.Title,
+                                access.IsOwner,
+                                access.AccessLevel))
             .SingleOrDefaultAsync(cancellationToken);
 
         if (detail is null)
@@ -381,9 +392,21 @@ public sealed class DocumentService(
         Guid id,
         CancellationToken cancellationToken = default)
     {
+        var access = await readAuthorizer.AuthorizeAsync(userId, id, cancellationToken);
+        if (!access.Allowed)
+        {
+            return new DocumentVersionHistoryResult(true, []);
+        }
+
+        var root = await db.Set<Document>().Where(x => x.Id == id).Select(x => new { x.OwnerId }).SingleOrDefaultAsync(cancellationToken);
+        if (root is null)
+        {
+            return new DocumentVersionHistoryResult(true, []);
+        }
+
         var documents = await (from document in db.Set<Document>()
                                join template in db.Set<Template>() on document.TemplateId equals template.Id
-                               where document.OwnerId == userId
+                               where document.OwnerId == root.OwnerId
                                select new DocumentLibraryItem(
                                    document.Id,
                                    document.TemplateId,

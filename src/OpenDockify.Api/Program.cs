@@ -13,6 +13,7 @@ using OpenDockify.Finance;
 using OpenDockify.Generation;
 using OpenDockify.Interviews;
 using OpenDockify.Rendering;
+using OpenDockify.Sharing;
 using OpenDockify.SystemConfig;
 using OpenDockify.Templates;
 
@@ -37,6 +38,7 @@ builder.Services.AddSeed<TemplateSeeder>();
 builder.Services.AddFinanceModule();
 builder.Services.AddRenderingModule();
 builder.Services.AddGenerationModule();
+builder.Services.AddSharingModule();
 builder.Services.AddInterviewsModule();
 builder.Services.AddAiAssistModule();
 builder.Services.AddEsignModule();
@@ -89,12 +91,22 @@ builder.Services.AddRateLimiter(options =>
                 AutoReplenishment = true,
             }));
     options.AddPolicy(AuthSecurityOptions.RegistrationPolicyName, httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = registrationAttemptsPerHour,
+                    Window = TimeSpan.FromHours(1),
+                    QueueLimit = 0,
+                    AutoReplenishment = true,
+                }));
+    options.AddPolicy("public-shares", httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => new FixedWindowRateLimiterOptions
             {
-                PermitLimit = registrationAttemptsPerHour,
-                Window = TimeSpan.FromHours(1),
+                PermitLimit = 30,
+                Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 0,
                 AutoReplenishment = true,
             }));
@@ -115,6 +127,7 @@ app.MapSystemConfigEndpoints();
 app.MapTemplateEndpoints();
 app.MapAdminTemplateEndpoints();
 app.MapDocumentEndpoints();
+app.MapSharingEndpoints();
 app.MapInterviewEndpoints();
 app.MapAiAssistEndpoints();
 app.MapAdminAiUsageEndpoints();

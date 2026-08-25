@@ -67,6 +67,8 @@ class DocumentView {
     required this.renderedText,
     required this.createdAt,
     this.downloadUrl,
+    this.isOwner = true,
+    this.accessLevel = 'owner',
   });
 
   final String id;
@@ -81,6 +83,8 @@ class DocumentView {
   final String renderedText;
   final DateTime? createdAt;
   final String? downloadUrl;
+  final bool isOwner;
+  final String accessLevel;
 
   factory DocumentView.fromJson(Map<String, dynamic> json) => DocumentView(
     id: json['id']?.toString() ?? '',
@@ -95,7 +99,81 @@ class DocumentView {
     renderedText: json['renderedText']?.toString() ?? '',
     createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? ''),
     downloadUrl: json['downloadUrl']?.toString(),
+    isOwner: json['isOwner'] != false,
+    accessLevel: json['accessLevel']?.toString() ?? 'owner',
   );
+}
+
+class DocumentShareItem {
+  const DocumentShareItem({
+    required this.kind,
+    required this.id,
+    this.username,
+    this.accessLevel,
+    this.allowDownload,
+    this.expiresAt,
+    required this.createdAt,
+    this.revokedAt,
+  });
+  final String kind;
+  final String id;
+  final String? username;
+  final String? accessLevel;
+  final bool? allowDownload;
+  final DateTime? expiresAt;
+  final DateTime? createdAt;
+  final DateTime? revokedAt;
+  factory DocumentShareItem.fromJson(Map<String, dynamic> json) =>
+      DocumentShareItem(
+        kind: json['kind']?.toString() ?? '',
+        id: json['id']?.toString() ?? '',
+        username: json['username']?.toString(),
+        accessLevel: json['accessLevel']?.toString(),
+        allowDownload: json['allowDownload'] as bool?,
+        expiresAt: DateTime.tryParse(json['expiresAt']?.toString() ?? ''),
+        createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? ''),
+        revokedAt: DateTime.tryParse(json['revokedAt']?.toString() ?? ''),
+      );
+}
+
+class CreatedDocumentShareLink {
+  const CreatedDocumentShareLink({
+    required this.id,
+    required this.token,
+    required this.expiresAt,
+    required this.allowDownload,
+  });
+  final String id;
+  final String token;
+  final DateTime? expiresAt;
+  final bool allowDownload;
+  factory CreatedDocumentShareLink.fromJson(Map<String, dynamic> json) =>
+      CreatedDocumentShareLink(
+        id: json['id']?.toString() ?? '',
+        token: json['token']?.toString() ?? '',
+        expiresAt: DateTime.tryParse(json['expiresAt']?.toString() ?? ''),
+        allowDownload: json['allowDownload'] == true,
+      );
+}
+
+class ShareAuditEntry {
+  const ShareAuditEntry({
+    required this.action,
+    required this.actorCategory,
+    required this.succeeded,
+    required this.createdAt,
+  });
+  final String action;
+  final String actorCategory;
+  final bool succeeded;
+  final DateTime? createdAt;
+  factory ShareAuditEntry.fromJson(Map<String, dynamic> json) =>
+      ShareAuditEntry(
+        action: json['action']?.toString() ?? '',
+        actorCategory: json['actorCategory']?.toString() ?? '',
+        succeeded: json['succeeded'] == true,
+        createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? ''),
+      );
 }
 
 class DocumentListPage {
