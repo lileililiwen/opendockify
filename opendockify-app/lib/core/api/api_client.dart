@@ -6,6 +6,7 @@ import '../models/admin.dart';
 import '../models/ai.dart';
 import '../models/auth.dart';
 import '../models/document.dart';
+import '../models/interview.dart';
 import '../models/template_dto.dart';
 import 'api_error.dart';
 
@@ -159,6 +160,64 @@ class ApiClient {
   Future<Template> copyTemplate(String id) async {
     final data = await _guard(() => _dio.post('/api/templates/$id/copy'));
     return Template.fromJson(_asMap(data));
+  }
+
+  // ---- Guided interviews ----
+
+  Future<InterviewResponse> createInterview(String templateId) async {
+    final data = await _guard(
+      () => _dio.post(
+        '/api/interviews',
+        data: {'templateId': templateId, 'selectedClauseIds': <String>[]},
+      ),
+    );
+    return InterviewResponse.fromJson(_asMap(data));
+  }
+
+  Future<InterviewResponse> getInterview(String id) async {
+    final data = await _guard(() => _dio.get('/api/interviews/$id'));
+    return InterviewResponse.fromJson(_asMap(data));
+  }
+
+  Future<InterviewResponse> answerInterview(
+    String id,
+    int expectedVersion,
+    Map<String, String> answers,
+  ) async {
+    final data = await _guard(
+      () => _dio.put(
+        '/api/interviews/$id/answer',
+        data: {'expectedVersion': expectedVersion, 'answers': answers},
+      ),
+    );
+    return InterviewResponse.fromJson(_asMap(data));
+  }
+
+  Future<InterviewResponse> backInterview(
+    String id,
+    int expectedVersion,
+  ) async {
+    final data = await _guard(
+      () => _dio.post(
+        '/api/interviews/$id/back',
+        data: {'expectedVersion': expectedVersion},
+      ),
+    );
+    return InterviewResponse.fromJson(_asMap(data));
+  }
+
+  Future<InterviewResponse> reviewInterview(String id) async {
+    final data = await _guard(() => _dio.get('/api/interviews/$id/review'));
+    return InterviewResponse.fromJson(_asMap(data));
+  }
+
+  Future<InterviewResponse> completeInterview(String id) async {
+    final data = await _guard(() => _dio.post('/api/interviews/$id/complete'));
+    return InterviewResponse.fromJson(_asMap(data));
+  }
+
+  Future<void> deleteInterview(String id) async {
+    await _guard(() => _dio.delete('/api/interviews/$id'));
   }
 
   // ---- Documents ----

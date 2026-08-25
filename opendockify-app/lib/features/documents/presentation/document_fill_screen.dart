@@ -12,6 +12,7 @@ import '../../../core/models/template_dto.dart';
 import '../../../core/providers.dart';
 import '../../../core/widgets/common.dart';
 import '../../templates/presentation/dynamic_template_form.dart';
+import 'guided_interview_form.dart';
 import '../../auth/application/session_controller.dart';
 
 /// Fills a template form and generates a document, or re-edits an existing
@@ -297,6 +298,13 @@ class _DocumentFillScreenState extends ConsumerState<DocumentFillScreen> {
 
   Widget _buildForm(BuildContext context) {
     final template = _template!;
+    if (!_isReedit && _definition!.interview != null) {
+      return GuidedInterviewForm(
+        template: template,
+        draftKey: _draftKey,
+        onGenerated: _showResult,
+      );
+    }
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [

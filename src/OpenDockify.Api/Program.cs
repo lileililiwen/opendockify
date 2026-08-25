@@ -11,6 +11,7 @@ using OpenDockify.Data;
 using OpenDockify.Esign;
 using OpenDockify.Finance;
 using OpenDockify.Generation;
+using OpenDockify.Interviews;
 using OpenDockify.Rendering;
 using OpenDockify.SystemConfig;
 using OpenDockify.Templates;
@@ -36,6 +37,7 @@ builder.Services.AddSeed<TemplateSeeder>();
 builder.Services.AddFinanceModule();
 builder.Services.AddRenderingModule();
 builder.Services.AddGenerationModule();
+builder.Services.AddInterviewsModule();
 builder.Services.AddAiAssistModule();
 builder.Services.AddEsignModule();
 
@@ -113,6 +115,7 @@ app.MapSystemConfigEndpoints();
 app.MapTemplateEndpoints();
 app.MapAdminTemplateEndpoints();
 app.MapDocumentEndpoints();
+app.MapInterviewEndpoints();
 app.MapAiAssistEndpoints();
 app.MapAdminAiUsageEndpoints();
 

@@ -30,7 +30,8 @@ void main() {
     });
 
     test('maps string numeric rules to numbers', () {
-      const json = '{"fields": [{"name": "n", "label": "N", "type": "number",'
+      const json =
+          '{"fields": [{"name": "n", "label": "N", "type": "number",'
           '"validation": {"min": "1", "maxLength": 4}}]}';
       final field = TemplateDefinitionParser.parse(json).fields.single;
       expect(field.validation?.min, 1);
@@ -38,28 +39,57 @@ void main() {
     });
 
     test('defaults unknown field type to text', () {
-      const json = '{"fields": [{"name": "x", "label": "X", "type": "mystery"}]}';
+      const json =
+          '{"fields": [{"name": "x", "label": "X", "type": "mystery"}]}';
       final field = TemplateDefinitionParser.parse(json).fields.single;
       expect(field.type, FieldType.text);
     });
 
     test('throws on empty definition', () {
-      expect(() => TemplateDefinitionParser.parse(''), throwsA(isA<TemplateDefinitionParseException>()));
-      expect(() => TemplateDefinitionParser.parse('   '), throwsA(isA<TemplateDefinitionParseException>()));
+      expect(
+        () => TemplateDefinitionParser.parse(''),
+        throwsA(isA<TemplateDefinitionParseException>()),
+      );
+      expect(
+        () => TemplateDefinitionParser.parse('   '),
+        throwsA(isA<TemplateDefinitionParseException>()),
+      );
     });
 
     test('throws on malformed JSON', () {
-      expect(() => TemplateDefinitionParser.parse('{not json'), throwsA(isA<TemplateDefinitionParseException>()));
+      expect(
+        () => TemplateDefinitionParser.parse('{not json'),
+        throwsA(isA<TemplateDefinitionParseException>()),
+      );
     });
 
     test('throws when root is not an object', () {
-      expect(() => TemplateDefinitionParser.parse('[1,2,3]'), throwsA(isA<TemplateDefinitionParseException>()));
+      expect(
+        () => TemplateDefinitionParser.parse('[1,2,3]'),
+        throwsA(isA<TemplateDefinitionParseException>()),
+      );
     });
 
     test('tolerates missing sections', () {
       final def = TemplateDefinitionParser.parse('{"fields": []}');
       expect(def.fields, isEmpty);
       expect(def.clauses, isEmpty);
+    });
+
+    test('recognizes a guided interview definition', () {
+      const json = '''
+      {
+        "fields": [{"name":"name","label":"Name","type":"string","required":true}],
+        "clauses": [],
+        "interview": {"version":1,"startStepId":"identity","steps":[]}
+      }
+      ''';
+
+      final interview = TemplateDefinitionParser.parse(json).interview;
+
+      expect(interview, isNotNull);
+      expect(interview?.version, 1);
+      expect(interview?.startStepId, 'identity');
     });
   });
 }

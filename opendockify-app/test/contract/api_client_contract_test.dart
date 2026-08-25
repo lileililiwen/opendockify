@@ -156,6 +156,25 @@ void main() {
     expect(adapter.requests.last.path, '/api/documents/finalize');
   });
 
+  test(
+    'guided interview create and answer use versioned session contract',
+    () async {
+      final created = await client.createInterview('t1');
+      expect(created.session?.currentStep?.id, 'identity');
+      expect(adapter.requests.last.path, '/api/interviews');
+
+      final answered = await client.answerInterview('s1', 0, const {
+        'name': 'Alice',
+      });
+      expect(answered.session?.version, 1);
+      expect(adapter.requests.last.path, '/api/interviews/s1/answer');
+      expect(adapter.requests.last.data, {
+        'expectedVersion': 0,
+        'answers': {'name': 'Alice'},
+      });
+    },
+  );
+
   test('settings returns SettingView list', () async {
     final settings = await client.getSettings();
     expect(settings.single.key, 'Ai:Enabled');
@@ -255,6 +274,10 @@ void adapterResponds(FakeAdapter a) {
           'renderedText': 'Preview',
           'warnings': [],
         };
+      case '/api/interviews':
+        return _interviewResponse(0);
+      case '/api/interviews/s1/answer':
+        return _interviewResponse(1);
       case '/api/documents/d1/metadata':
         return {
           'id': 'd1',
@@ -308,3 +331,26 @@ void adapterResponds(FakeAdapter a) {
     }
   };
 }
+
+Map<String, dynamic> _interviewResponse(int version) => {
+  'session': {
+    'id': 's1',
+    'templateId': 't1',
+    'version': version,
+    'expiresAt': '2026-09-01T00:00:00Z',
+    'answers': version == 0 ? <String, String>{} : {'name': 'Alice'},
+    'selectedClauseIds': <String>[],
+    'readyForReview': false,
+    'currentStep': {
+      'id': 'identity',
+      'title': 'Identity',
+      'position': 1,
+      'total': 1,
+      'fields': [
+        {'name': 'name', 'label': 'Name', 'type': 'string', 'required': true},
+      ],
+    },
+  },
+  'review': <Object>[],
+  'preview': null,
+};

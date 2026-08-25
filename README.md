@@ -36,6 +36,10 @@ shown in the application UI.
   exports the PDF and keeps an immutable history (re-editing creates a new
   record). The document library supports titles, template-aware search,
   active/archived filters, deterministic sorting, and connected version history.
+- **Guided interviews** — templates may define bounded conditional question
+  flows. Answers are validated and saved server-side in private expiring
+  sessions, can be resumed after interruption, and use the same
+  preview/finalization validation as the standard form.
 - **Chinese finance features** — currency fields render as RMB-uppercase
   (中文大写); annual interest rates are validated against the LPR reference with
   a warning (never blocking).
