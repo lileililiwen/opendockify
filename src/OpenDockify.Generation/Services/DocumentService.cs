@@ -42,6 +42,7 @@ public sealed record GenerateResult(
 public sealed record DocumentPreviewResult(
     string? RenderedText,
     string? TemplateName,
+    Guid? TemplateRevisionId,
     IReadOnlyList<string> Warnings,
     GenerationErrorKind ErrorKind,
     string? Error)
@@ -51,12 +52,12 @@ public sealed record DocumentPreviewResult(
         string templateName,
         IReadOnlyList<string> warnings)
     {
-        return new DocumentPreviewResult(renderedText, templateName, warnings, GenerationErrorKind.None, null);
+        return new DocumentPreviewResult(renderedText, templateName, null, warnings, GenerationErrorKind.None, null);
     }
 
     public static DocumentPreviewResult Failure(GenerationErrorKind kind, string error)
     {
-        return new DocumentPreviewResult(null, null, [], kind, error);
+        return new DocumentPreviewResult(null, null, null, [], kind, error);
     }
 }
 
@@ -154,6 +155,7 @@ public sealed class DocumentService(
             Id = Guid.NewGuid(),
             OwnerId = userId,
             TemplateId = command.TemplateId,
+            TemplateRevisionId = preview.TemplateRevisionId,
             Title = templateName,
             IsArchived = false,
             Status = DocumentStatus.Generated,
@@ -196,6 +198,10 @@ public sealed class DocumentService(
         }
 
         var template = templateResult.Value!;
+        var revisionId = await db.Set<TemplateRevision>()
+            .Where(x => x.TemplateId == template.Id && x.Revision == template.CurrentRevision)
+            .Select(x => (Guid?)x.Id)
+            .SingleOrDefaultAsync(cancellationToken);
         var definitionValidation = TemplateDefinitionValidator.Validate(template.DefinitionJson, template.Body);
         if (definitionValidation.Error is not null)
         {
@@ -220,7 +226,7 @@ public sealed class DocumentService(
         }
 
         var fullText = AppendRiskNotice(render.Text, template.RiskNoticeText);
-        return DocumentPreviewResult.Success(fullText, template.Name, warnings);
+        return new DocumentPreviewResult(fullText, template.Name, revisionId, warnings, GenerationErrorKind.None, null);
     }
 
     /// <summary>

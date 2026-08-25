@@ -10,6 +10,14 @@ public sealed class Template
 {
     public Guid Id { get; set; }
 
+    public Guid StableId { get; set; } = Guid.NewGuid();
+
+    public int CurrentRevision { get; set; } = 1;
+
+    public string? SourceInstance { get; set; }
+
+    public Guid? SourceStableId { get; set; }
+
     public Guid? OwnerId { get; set; }
 
     public bool IsBuiltIn { get; set; }

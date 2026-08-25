@@ -8,6 +8,7 @@ public static class TemplatesModuleExtensions
     public static IServiceCollection AddTemplatesModule(this IServiceCollection services)
     {
         services.AddScoped<TemplateService>();
+        services.AddScoped<TemplatePackageService>();
         return services;
     }
 }

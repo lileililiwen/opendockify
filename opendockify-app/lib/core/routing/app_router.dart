@@ -6,6 +6,7 @@ import '../config/connection_controller.dart';
 import '../../features/admin/presentation/admin_home_screen.dart';
 import '../../features/admin/presentation/admin_settings_screen.dart';
 import '../../features/admin/presentation/admin_template_upsert_screen.dart';
+import '../../features/admin/presentation/template_package_import_screen.dart';
 import '../../features/admin/presentation/ai_usage_screen.dart';
 import '../../features/auth/application/session_controller.dart';
 import '../../features/auth/presentation/connection_screen.dart';
@@ -46,7 +47,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       final onAuth = location == '/login' || location == '/register';
 
       // Let the splash screen finish bootstrapping before redirecting.
-      if (onSplash && (connection.isLoading || session.status == SessionStatus.unknown)) return null;
+      if (onSplash && (connection.isLoading || session.status == SessionStatus.unknown)) {
+        return null;
+      }
 
       if (connection.isLoading && location == '/connect') return null;
 
@@ -88,6 +91,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/admin', builder: (context, state) => const AdminHomeScreen()),
       GoRoute(path: '/admin/settings', builder: (context, state) => const AdminSettingsScreen()),
       GoRoute(path: '/admin/templates/new', builder: (context, state) => const AdminTemplateUpsertScreen()),
+      GoRoute(path: '/admin/templates/import', builder: (context, state) => const TemplatePackageImportScreen()),
       GoRoute(path: '/admin/ai-usage', builder: (context, state) => const AiUsageScreen()),
       GoRoute(path: '/settings', builder: (context, state) => const SettingsScreen()),
     ],

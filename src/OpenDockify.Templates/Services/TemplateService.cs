@@ -97,6 +97,7 @@ public sealed class TemplateService(DbContext db)
         };
 
         db.Set<Template>().Add(template);
+        db.Set<TemplateRevision>().Add(CreateRevision(template));
         await db.SaveChangesAsync(cancellationToken);
 
         return TemplateResult.Success(template);
@@ -139,6 +140,8 @@ public sealed class TemplateService(DbContext db)
         template.Body = draft.Body;
         template.DefinitionJson = draft.DefinitionJson;
         template.UpdatedAt = DateTimeOffset.UtcNow;
+        template.CurrentRevision++;
+        db.Set<TemplateRevision>().Add(CreateRevision(template));
 
         await db.SaveChangesAsync(cancellationToken);
 
@@ -215,6 +218,8 @@ public sealed class TemplateService(DbContext db)
         };
 
         db.Set<Template>().Add(copy);
+        copy.SourceStableId = template.StableId;
+        db.Set<TemplateRevision>().Add(CreateRevision(copy));
         await db.SaveChangesAsync(cancellationToken);
 
         return TemplateResult.Success(copy);
@@ -275,6 +280,13 @@ public sealed class TemplateService(DbContext db)
         template.DefinitionJson = draft.DefinitionJson;
         template.UpdatedAt = DateTimeOffset.UtcNow;
 
+        if (id is not null)
+        {
+            template.CurrentRevision++;
+        }
+
+        db.Set<TemplateRevision>().Add(CreateRevision(template));
+
         await db.SaveChangesAsync(cancellationToken);
 
         return TemplateResult.Success(template);
@@ -312,5 +324,66 @@ public sealed class TemplateService(DbContext db)
         }
 
         return (TemplateErrorKind.None, null);
+    }
+
+    public async Task<IReadOnlyList<TemplateRevision>> GetRevisionsAsync(Guid userId, Guid id, CancellationToken cancellationToken)
+    {
+        var template = await GetByIdAsync(userId, id, cancellationToken);
+        if (template.NotFound)
+        {
+            return [];
+        }
+
+        return await db.Set<TemplateRevision>()
+            .Where(x => x.TemplateId == id)
+            .OrderByDescending(x => x.Revision)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<TemplateResult> RollbackAsync(Guid userId, Guid id, int revision, CancellationToken cancellationToken)
+    {
+        var current = await GetByIdAsync(userId, id, cancellationToken);
+        if (current.NotFound || current.Value!.OwnerId != userId)
+        {
+            return TemplateResult.Failure(TemplateErrorKind.NotFound, "Template not found.");
+        }
+
+        var source = await db.Set<TemplateRevision>()
+            .SingleOrDefaultAsync(x => x.TemplateId == id && x.Revision == revision, cancellationToken);
+        if (source is null)
+        {
+            return TemplateResult.Failure(TemplateErrorKind.NotFound, "Template revision not found.");
+        }
+
+        var template = current.Value;
+        template.Name = source.Name;
+        template.Category = source.Category;
+        template.Description = source.Description;
+        template.RiskNoticeText = source.RiskNoticeText;
+        template.Body = source.Body;
+        template.DefinitionJson = source.DefinitionJson;
+        template.CurrentRevision++;
+        template.UpdatedAt = DateTimeOffset.UtcNow;
+        db.Set<TemplateRevision>().Add(CreateRevision(template));
+        await db.SaveChangesAsync(cancellationToken);
+        return TemplateResult.Success(template);
+    }
+
+    private static TemplateRevision CreateRevision(Template template)
+    {
+        return new()
+        {
+            Id = Guid.NewGuid(),
+            TemplateId = template.Id,
+            Revision = template.CurrentRevision,
+            Name = template.Name,
+            Category = template.Category,
+            Description = template.Description,
+            RiskNoticeText = template.RiskNoticeText,
+            Body = template.Body,
+            DefinitionJson = template.DefinitionJson,
+            SourceInstance = template.SourceInstance,
+            SourceStableId = template.SourceStableId,
+        };
     }
 }

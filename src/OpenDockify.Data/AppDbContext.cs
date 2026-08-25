@@ -17,6 +17,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     public DbSet<OpenDockify.Templates.Models.Template> Templates => Set<OpenDockify.Templates.Models.Template>();
 
+    public DbSet<OpenDockify.Templates.Models.TemplateRevision> TemplateRevisions => Set<OpenDockify.Templates.Models.TemplateRevision>();
+
     public DbSet<OpenDockify.Generation.Models.Document> Documents => Set<OpenDockify.Generation.Models.Document>();
 
     public DbSet<OpenDockify.Interviews.Models.InterviewSession> InterviewSessions => Set<OpenDockify.Interviews.Models.InterviewSession>();

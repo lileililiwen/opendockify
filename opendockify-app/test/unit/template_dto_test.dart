@@ -44,6 +44,9 @@ void main() {
         'isPublic': true,
         'ownerId': null,
         'createdAt': '2026-01-02T03:04:05Z',
+        'stableId': 'stable-1',
+        'currentRevision': 3,
+        'sourceInstance': 'legal.example',
       });
       expect(template.id, 't1');
       expect(template.body, 'body {{x}}');
@@ -51,6 +54,9 @@ void main() {
       expect(template.isPublic, isTrue);
       expect(template.ownerId, isNull);
       expect(template.createdAt, DateTime.utc(2026, 1, 2, 3, 4, 5));
+      expect(template.stableId, 'stable-1');
+      expect(template.currentRevision, 3);
+      expect(template.sourceInstance, 'legal.example');
     });
   });
 
@@ -83,5 +89,16 @@ void main() {
       expect(request.toJson()['description'], isNull);
       expect(request.toJson()['riskNoticeText'], isNull);
     });
+  });
+
+  test('package validation exposes receipt and conflict', () {
+    final validation = PackageValidation.fromJson(const {
+      'receipt': 'receipt-1',
+      'conflict': true,
+      'digest': 'abc',
+    });
+    expect(validation.receipt, 'receipt-1');
+    expect(validation.conflict, isTrue);
+    expect(validation.digest, 'abc');
   });
 }

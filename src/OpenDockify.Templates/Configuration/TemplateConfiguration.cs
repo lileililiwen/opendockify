@@ -12,6 +12,10 @@ public sealed class TemplateConfiguration : IEntityTypeConfiguration<Template>
 
         builder.HasKey(t => t.Id);
 
+        builder.HasIndex(t => t.StableId).IsUnique();
+        builder.Property(t => t.CurrentRevision).IsRequired();
+        builder.Property(t => t.SourceInstance).HasMaxLength(200);
+
         builder.Property(t => t.Name)
             .HasMaxLength(200)
             .IsRequired();

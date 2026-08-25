@@ -91,11 +91,16 @@ public sealed class InterviewSessionService(
             return InterviewResult.Failure(InterviewErrorKind.Validation, clauseError);
         }
 
+        var revisionId = await db.Set<TemplateRevision>()
+            .Where(x => x.TemplateId == template.Id && x.Revision == template.CurrentRevision)
+            .Select(x => (Guid?)x.Id)
+            .SingleOrDefaultAsync(cancellationToken);
         var session = new InterviewSession
         {
             Id = Guid.NewGuid(),
             OwnerId = ownerId,
             TemplateId = template.Id,
+            TemplateRevisionId = revisionId,
             TemplateRevisionStamp = template.UpdatedAt,
             CurrentStepId = interview.StartStepId,
             SelectedClauseIdsJson = JsonSerializer.Serialize(selectedClauseIds ?? [], _jsonOptions),

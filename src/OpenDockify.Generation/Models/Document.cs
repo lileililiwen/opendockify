@@ -24,6 +24,8 @@ public sealed class Document
 
     public Guid TemplateId { get; set; }
 
+    public Guid? TemplateRevisionId { get; set; }
+
     /// <summary>Owner-editable library label; legal content remains immutable.</summary>
     public string Title { get; set; } = string.Empty;
 
