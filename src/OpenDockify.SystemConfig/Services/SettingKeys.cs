@@ -42,6 +42,9 @@ public static class SettingKeys
     public const string AiRateLimitPerDay = "Ai.RateLimitPerDay";
     public const string LprOneYearRate = "Lpr.OneYearRate";
     public const string LprReferenceDate = "Lpr.ReferenceDate";
+    public const string SharingEnabled = "Sharing.Enabled";
+    public const string SharingMaximumLifetimeHours = "Sharing.MaximumLifetimeHours";
+    public const string SharingAuditRetentionDays = "Sharing.AuditRetentionDays";
 
     public static IReadOnlyList<SettingKeyDefinition> All { get; } = new List<SettingKeyDefinition>
     {
@@ -53,6 +56,9 @@ public static class SettingKeys
         new(AiRateLimitPerDay, SettingValueType.Number, "0", "AI_RATE_LIMIT_PER_DAY"),
         new(LprOneYearRate, SettingValueType.Number, "3.45", "LPR_ONE_YEAR_RATE"),
         new(LprReferenceDate, SettingValueType.Date, null, "LPR_REFERENCE_DATE"),
+        new(SharingEnabled, SettingValueType.Bool, "true", "SHARING_ENABLED"),
+        new(SharingMaximumLifetimeHours, SettingValueType.Number, "72", "SHARING_MAXIMUM_LIFETIME_HOURS"),
+        new(SharingAuditRetentionDays, SettingValueType.Number, "90", "SHARING_AUDIT_RETENTION_DAYS"),
     };
 
     /// <summary>

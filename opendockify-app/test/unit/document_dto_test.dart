@@ -156,4 +156,24 @@ void main() {
       expect(doc.downloadUrl, isNotNull);
     });
   });
+
+  test('sharing DTOs preserve one-time token and revocation state', () {
+    final link = CreatedDocumentShareLink.fromJson(const {
+      'id': 'link-1',
+      'token': 'secret-once',
+      'allowDownload': true,
+      'expiresAt': '2026-08-26T00:00:00Z',
+    });
+    final share = DocumentShareItem.fromJson(const {
+      'kind': 'grant',
+      'id': 'grant-1',
+      'username': 'reviewer',
+      'accessLevel': 'review',
+      'createdAt': '2026-08-25T00:00:00Z',
+    });
+    expect(link.token, 'secret-once');
+    expect(link.allowDownload, isTrue);
+    expect(share.username, 'reviewer');
+    expect(share.accessLevel, 'review');
+  });
 }

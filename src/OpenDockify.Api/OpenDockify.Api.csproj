@@ -11,6 +11,7 @@
     <ProjectReference Include="..\OpenDockify.Templates\OpenDockify.Templates.csproj" />
     <ProjectReference Include="..\OpenDockify.Generation\OpenDockify.Generation.csproj" />
     <ProjectReference Include="..\OpenDockify.Interviews\OpenDockify.Interviews.csproj" />
+    <ProjectReference Include="..\OpenDockify.Sharing\OpenDockify.Sharing.csproj" />
     <ProjectReference Include="..\OpenDockify.Rendering\OpenDockify.Rendering.csproj" />
     <ProjectReference Include="..\OpenDockify.Finance\OpenDockify.Finance.csproj" />
     <ProjectReference Include="..\OpenDockify.AiAssist\OpenDockify.AiAssist.csproj" />
