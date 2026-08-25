@@ -42,6 +42,8 @@ public static class TemplateDefinitionValidator
     public const int MaxDepth = 32;
     public const int MaxFields = 200;
     public const int MaxClauses = 50;
+    public const int MaxInterviewSteps = 100;
+    public const int MaxConditionDepth = 8;
 
     /// <summary>Matches <c>{{variable}}</c> placeholders; names are [A-Za-z0-9_].</summary>
     public static readonly Regex PlaceholderPattern = new(
@@ -143,6 +145,12 @@ public static class TemplateDefinitionValidator
             return TemplateDefinitionValidation.Failure(DefinitionErrorKind.Invalid, placeholderCheck);
         }
 
+        var interviewCheck = InterviewDefinitionCompiler.Validate(definition);
+        if (interviewCheck is not null)
+        {
+            return TemplateDefinitionValidation.Failure(DefinitionErrorKind.Invalid, interviewCheck);
+        }
+
         return TemplateDefinitionValidation.Success(definition);
     }
 
@@ -177,6 +185,164 @@ public static class TemplateDefinitionValidator
         };
         options.Converters.Add(new FieldTypeJsonConverter());
         return options;
+    }
+}
+
+public static class InterviewDefinitionCompiler
+{
+    private static readonly HashSet<string> _leafOperators = new(StringComparer.Ordinal)
+    {
+        "equals", "notEquals", "in",
+    };
+
+    private static readonly HashSet<string> _groupOperators = new(StringComparer.Ordinal)
+    {
+        "and", "or",
+    };
+
+    public static string? Validate(TemplateDefinition definition)
+    {
+        var interview = definition.Interview;
+        if (interview is null)
+        {
+            return null;
+        }
+
+        if (interview.Version != 1)
+        {
+            return $"Interview version '{interview.Version}' is not supported.";
+        }
+
+        if (interview.Steps.Count is 0 or > TemplateDefinitionValidator.MaxInterviewSteps)
+        {
+            return $"Interview must contain between 1 and {TemplateDefinitionValidator.MaxInterviewSteps} steps.";
+        }
+
+        var fields = definition.Fields.Select(field => field.Name).ToHashSet(StringComparer.Ordinal);
+        var steps = new Dictionary<string, InterviewStepDefinition>(StringComparer.Ordinal);
+        foreach (var step in interview.Steps)
+        {
+            if (string.IsNullOrWhiteSpace(step.Id) || !steps.TryAdd(step.Id, step))
+            {
+                return $"Interview step id '{step.Id}' is blank or duplicated.";
+            }
+
+            if (step.Fields.Count == 0 || step.Fields.Distinct(StringComparer.Ordinal).Count() != step.Fields.Count)
+            {
+                return $"Interview step '{step.Id}' must contain unique fields.";
+            }
+
+            var unknownField = step.Fields.FirstOrDefault(field => !fields.Contains(field));
+            if (unknownField is not null)
+            {
+                return $"Interview step '{step.Id}' references unknown field '{unknownField}'.";
+            }
+
+            var conditionError = ValidateCondition(step.Condition, fields, 1, $"interview.steps.{step.Id}.condition");
+            if (conditionError is not null)
+            {
+                return conditionError;
+            }
+        }
+
+        if (!steps.ContainsKey(interview.StartStepId))
+        {
+            return $"Interview start step '{interview.StartStepId}' does not exist.";
+        }
+
+        var invalidNext = interview.Steps.FirstOrDefault(
+            step => step.NextStepId is not null && !steps.ContainsKey(step.NextStepId));
+        if (invalidNext is not null)
+        {
+            return $"Interview step '{invalidNext.Id}' points to unknown next step '{invalidNext.NextStepId}'.";
+        }
+
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        var current = interview.StartStepId;
+        while (current is not null)
+        {
+            if (!visited.Add(current))
+            {
+                return $"Interview graph contains a cycle at step '{current}'.";
+            }
+
+            current = steps[current].NextStepId;
+        }
+
+        var unreachable = steps.Keys.FirstOrDefault(id => !visited.Contains(id));
+        if (unreachable is not null)
+        {
+            return $"Interview step '{unreachable}' is unreachable from the start step.";
+        }
+
+        var reachableFields = visited.SelectMany(id => steps[id].Fields).ToHashSet(StringComparer.Ordinal);
+        var missingRequired = definition.Fields.FirstOrDefault(field => field.Required && !reachableFields.Contains(field.Name));
+        return missingRequired is null
+            ? null
+            : $"Required field '{missingRequired.Name}' is unreachable in the interview.";
+    }
+
+    private static string? ValidateCondition(
+        InterviewCondition? condition,
+        IReadOnlySet<string> fields,
+        int depth,
+        string path)
+    {
+        if (condition is null)
+        {
+            return null;
+        }
+
+        if (depth > TemplateDefinitionValidator.MaxConditionDepth)
+        {
+            return $"{path} exceeds maximum condition depth.";
+        }
+
+        if (_leafOperators.Contains(condition.Operator))
+        {
+            if (condition.Field is null || !fields.Contains(condition.Field))
+            {
+                return $"{path} references unknown field '{condition.Field}'.";
+            }
+
+            if (condition.Conditions is { Count: > 0 })
+            {
+                return $"{path} leaf operator cannot contain child conditions.";
+            }
+
+            if (condition.Operator == "in" && condition.Values is not { Count: > 0 })
+            {
+                return $"{path} 'in' operator requires values.";
+            }
+
+            if (condition.Operator != "in" && condition.Value is null)
+            {
+                return $"{path} '{condition.Operator}' operator requires a value.";
+            }
+
+            return null;
+        }
+
+        if (!_groupOperators.Contains(condition.Operator))
+        {
+            return $"{path} uses unsupported operator '{condition.Operator}'.";
+        }
+
+        if (condition.Conditions is not { Count: > 0 } children)
+        {
+            return $"{path} group operator requires child conditions.";
+        }
+
+        for (var index = 0; index < children.Count; index++)
+        {
+            var error = ValidateCondition(children[index], fields, depth + 1, $"{path}.conditions[{index}]");
+            if (error is not null)
+            {
+                return error;
+            }
+        }
+
+        return null;
     }
 }
 

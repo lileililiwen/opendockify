@@ -18,6 +18,45 @@ public sealed class TemplateDefinition
     public List<FieldDefinition> Fields { get; set; } = [];
 
     public List<ClauseDefinition> Clauses { get; set; } = [];
+
+    public InterviewDefinition? Interview { get; set; }
+}
+
+public sealed class InterviewDefinition
+{
+    public int Version { get; set; } = 1;
+
+    public string StartStepId { get; set; } = string.Empty;
+
+    public List<InterviewStepDefinition> Steps { get; set; } = [];
+}
+
+public sealed class InterviewStepDefinition
+{
+    public string Id { get; set; } = string.Empty;
+
+    public string Title { get; set; } = string.Empty;
+
+    public string? ReviewLabel { get; set; }
+
+    public List<string> Fields { get; set; } = [];
+
+    public InterviewCondition? Condition { get; set; }
+
+    public string? NextStepId { get; set; }
+}
+
+public sealed class InterviewCondition
+{
+    public string Operator { get; set; } = string.Empty;
+
+    public string? Field { get; set; }
+
+    public string? Value { get; set; }
+
+    public List<string>? Values { get; set; }
+
+    public List<InterviewCondition>? Conditions { get; set; }
 }
 
 public sealed class FieldDefinition

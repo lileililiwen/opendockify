@@ -88,25 +88,33 @@ class FieldDefinition {
   final bool required;
   final ValidationRule? validation;
 
-  factory FieldDefinition.fromJson(Map<String, dynamic> json) => FieldDefinition(
+  factory FieldDefinition.fromJson(Map<String, dynamic> json) =>
+      FieldDefinition(
         name: json['name']?.toString() ?? '',
         label: json['label']?.toString() ?? '',
         type: FieldType.fromApi(json['type']?.toString()),
         required: json['required'] == true,
         validation: ValidationRule.fromJson(
-          json['validation'] is Map<String, dynamic> ? json['validation'] as Map<String, dynamic> : null,
+          json['validation'] is Map<String, dynamic>
+              ? json['validation'] as Map<String, dynamic>
+              : null,
         ),
       );
 }
 
 class ClauseDefinition {
-  const ClauseDefinition({required this.id, required this.title, required this.text});
+  const ClauseDefinition({
+    required this.id,
+    required this.title,
+    required this.text,
+  });
 
   final String id;
   final String title;
   final String text;
 
-  factory ClauseDefinition.fromJson(Map<String, dynamic> json) => ClauseDefinition(
+  factory ClauseDefinition.fromJson(Map<String, dynamic> json) =>
+      ClauseDefinition(
         id: json['id']?.toString() ?? '',
         title: json['title']?.toString() ?? '',
         text: json['text']?.toString() ?? '',
@@ -114,21 +122,54 @@ class ClauseDefinition {
 }
 
 class TemplateDefinition {
-  const TemplateDefinition({this.fields = const [], this.clauses = const []});
+  const TemplateDefinition({
+    this.fields = const [],
+    this.clauses = const [],
+    this.interview,
+  });
 
   final List<FieldDefinition> fields;
   final List<ClauseDefinition> clauses;
+  final InterviewDefinition? interview;
 
-  factory TemplateDefinition.fromJson(Map<String, dynamic> json) => TemplateDefinition(
+  factory TemplateDefinition.fromJson(Map<String, dynamic> json) =>
+      TemplateDefinition(
         fields: _asList(json['fields'])
-            .map((e) => FieldDefinition.fromJson(e is Map<String, dynamic> ? e : <String, dynamic>{}))
+            .map(
+              (e) => FieldDefinition.fromJson(
+                e is Map<String, dynamic> ? e : <String, dynamic>{},
+              ),
+            )
             .toList(),
         clauses: _asList(json['clauses'])
-            .map((e) => ClauseDefinition.fromJson(e is Map<String, dynamic> ? e : <String, dynamic>{}))
+            .map(
+              (e) => ClauseDefinition.fromJson(
+                e is Map<String, dynamic> ? e : <String, dynamic>{},
+              ),
+            )
             .toList(),
+        interview: json['interview'] is Map<String, dynamic>
+            ? InterviewDefinition.fromJson(
+                json['interview'] as Map<String, dynamic>,
+              )
+            : null,
       );
 
-  static List<dynamic> _asList(Object? value) => value is List ? value : const [];
+  static List<dynamic> _asList(Object? value) =>
+      value is List ? value : const [];
+}
+
+class InterviewDefinition {
+  const InterviewDefinition({required this.version, required this.startStepId});
+
+  final int version;
+  final String startStepId;
+
+  factory InterviewDefinition.fromJson(Map<String, dynamic> json) =>
+      InterviewDefinition(
+        version: json['version'] is int ? json['version'] as int : 1,
+        startStepId: json['startStepId']?.toString() ?? '',
+      );
 }
 
 class TemplateDefinitionParseException implements Exception {
@@ -152,11 +193,15 @@ class TemplateDefinitionParser {
     try {
       final decoded = jsonDecode(definitionJson);
       if (decoded is! Map<String, dynamic>) {
-        throw TemplateDefinitionParseException('Template definition must be a JSON object.');
+        throw TemplateDefinitionParseException(
+          'Template definition must be a JSON object.',
+        );
       }
       return TemplateDefinition.fromJson(decoded);
     } on FormatException {
-      throw TemplateDefinitionParseException('Template definition is not valid JSON.');
+      throw TemplateDefinitionParseException(
+        'Template definition is not valid JSON.',
+      );
     }
   }
 }

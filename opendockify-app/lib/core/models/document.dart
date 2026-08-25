@@ -184,16 +184,19 @@ class LocalDocumentDraft {
     required this.values,
     required this.selectedClauseIds,
     required this.updatedAt,
+    this.interviewSessionId,
   });
 
   final Map<String, String> values;
   final List<String> selectedClauseIds;
   final DateTime updatedAt;
+  final String? interviewSessionId;
 
   Map<String, dynamic> toJson() => {
     'values': values,
     'selectedClauseIds': selectedClauseIds,
     'updatedAt': updatedAt.toUtc().toIso8601String(),
+    if (interviewSessionId != null) 'interviewSessionId': interviewSessionId,
   };
 
   factory LocalDocumentDraft.fromJson(Map<String, dynamic> json) {
@@ -211,6 +214,7 @@ class LocalDocumentDraft {
       updatedAt:
           DateTime.tryParse(json['updatedAt']?.toString() ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      interviewSessionId: json['interviewSessionId']?.toString(),
     );
   }
 }

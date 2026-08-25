@@ -19,6 +19,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     public DbSet<OpenDockify.Generation.Models.Document> Documents => Set<OpenDockify.Generation.Models.Document>();
 
+    public DbSet<OpenDockify.Interviews.Models.InterviewSession> InterviewSessions => Set<OpenDockify.Interviews.Models.InterviewSession>();
+
     public DbSet<OpenDockify.AiAssist.Models.AiUsageLog> AiUsageLogs => Set<OpenDockify.AiAssist.Models.AiUsageLog>();
 
     public DbSet<OpenDockify.Esign.Models.Signer> Signers => Set<OpenDockify.Esign.Models.Signer>();
@@ -35,6 +37,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(OpenDockify.Templates.Models.Template).Assembly);
         // Added by document-generation.
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(OpenDockify.Generation.Models.Document).Assembly);
+        // Added by guided-interview-workflows.
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(OpenDockify.Interviews.Models.InterviewSession).Assembly);
         // Added by ai-assist.
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(OpenDockify.AiAssist.Models.AiUsageLog).Assembly);
         // Added by esign-extensions.

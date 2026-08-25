@@ -33,10 +33,12 @@ void main() {
         values: const {'party': 'Alice'},
         selectedClauseIds: const ['cl1'],
         updatedAt: DateTime.utc(2026, 1, 1),
+        interviewSessionId: 'session-1',
       );
 
       await store.write(firstKey, draft);
       expect((await store.read(firstKey))?.values['party'], 'Alice');
+      expect((await store.read(firstKey))?.interviewSessionId, 'session-1');
       expect(await store.read(otherKey), isNull);
 
       await store.clear(firstKey);
