@@ -13,6 +13,7 @@ public sealed class WebhookDeliveryConfiguration : IEntityTypeConfiguration<Webh
         builder.Property(x => x.State).HasConversion<int>().IsRequired();
         builder.Property(x => x.LastError).HasMaxLength(500);
         builder.Property(x => x.BlockedReason).HasMaxLength(100);
+        builder.Property(x => x.AttemptLog).IsRequired();
         // One delivery per (subscription, event): at-least-once per receiver,
         // never duplicated by outbox re-processing.
         builder.HasIndex(x => new { x.SubscriptionId, x.EventId }).IsUnique();

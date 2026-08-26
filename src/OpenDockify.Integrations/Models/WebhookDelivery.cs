@@ -42,6 +42,12 @@ public sealed class WebhookDelivery
     /// <summary>Set when the destination was refused by outbound-safety checks.</summary>
     public string? BlockedReason { get; set; }
 
+    /// <summary>
+    /// Bounded JSON attempt log (newest last): [{"atUtc","statusCode","error"}].
+    /// Diagnostic only; never contains bodies or secrets.
+    /// </summary>
+    public string AttemptLog { get; set; } = "[]";
+
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;

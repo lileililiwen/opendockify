@@ -142,6 +142,8 @@ Content-Type: application/json
 - `201` returns the signing **secret exactly once**: `{"subscription": {...}, "secret": "whsec_..."}`.
 - Destinations are validated at creation and re-validated on every attempt (see §5).
 - `GET /api/integrations/webhooks/subscriptions` — list (no secrets).
+- `POST /api/integrations/webhooks/subscriptions/{id}/rotate-secret` — returns the
+  new secret exactly once; the old secret stops working immediately.
 - `DELETE /api/integrations/webhooks/subscriptions/{id}` — remove.
 - Limits: at most `Integrations:MaxSubscriptionsPerOwner` (default 10) per owner.
 
@@ -217,7 +219,11 @@ loopback · link-local (incl. cloud metadata `169.254.169.254`) · private
 (RFC1918, `fc00::/7`) · shared address space (`100.64/10`) · multicast /
 reserved / broadcast · unspecified.
 
-Blocked destinations are recorded as `Blocked` with the reason and never retried automatically.
+Policy violations (prohibited ranges, non-HTTPS) are recorded as `Blocked` with
+the reason and never retried automatically. Transient failures — DNS resolution
+failures, timeouts, connection errors — stay `Pending` and keep retrying inside
+the attempt budget. Each delivery also keeps a bounded timeline of its last five
+attempts (timestamp, status code or error), exposed via the deliveries listing.
 
 Deployers can punch explicit holes for internal receivers:
 
