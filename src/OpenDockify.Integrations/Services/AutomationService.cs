@@ -26,6 +26,7 @@ public sealed record AutomationPreviewResult(
 /// <summary>Stable success body of the finalize operation (also the webhook data payload).</summary>
 public sealed record AutomationDocumentPayload(
     Guid DocumentId,
+    Guid OperationId,
     Guid TemplateId,
     string TemplateName,
     string Title,
@@ -133,8 +134,9 @@ public sealed class AutomationService(
                 null);
         }
 
+        var operationId = Guid.NewGuid();
         var execution = await idempotencyService.ExecuteAsync(
-            new IdempotencyRequest(tokenId, ownerId, key, route, requestDigest),
+            new IdempotencyRequest(tokenId, ownerId, key, route, requestDigest, operationId),
             async ct =>
             {
                 var generated = await documentService.GenerateAsync(ownerId, command, ct);
@@ -145,6 +147,7 @@ public sealed class AutomationService(
 
                 var payload = new AutomationDocumentPayload(
                     generated.Document!.Id,
+                    operationId,
                     command.TemplateId,
                     generated.TemplateName ?? string.Empty,
                     generated.Document.Title,
@@ -194,8 +197,8 @@ public sealed class AutomationService(
                 record.Outcome.ToString().ToLowerInvariant(),
                 record.StatusCode,
                 record.DocumentId,
-                record.CreatedAtUtc,
-                record.ExpiresAtUtc);
+                DateTime.SpecifyKind(record.CreatedAtUtc, DateTimeKind.Utc),
+                DateTime.SpecifyKind(record.ExpiresAtUtc, DateTimeKind.Utc));
     }
 
     private async Task<PreValidation> PreValidateAsync(

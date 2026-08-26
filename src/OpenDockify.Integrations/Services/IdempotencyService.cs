@@ -13,7 +13,8 @@ public sealed record IdempotencyRequest(
     Guid OwnerId,
     string Key,
     string Route,
-    string RequestDigest);
+    string RequestDigest,
+    Guid? OperationId = null);
 
 /// <summary>Outcome produced by the wrapped mutation when it actually runs.</summary>
 public sealed record MutationOutcome(
@@ -28,7 +29,8 @@ public sealed record IdempotencyExecution(
     string ResponseJson,
     bool Replayed,
     bool Conflict,
-    Guid? DocumentId = null)
+    Guid? DocumentId = null,
+    Guid? OperationId = null)
 {
     private static readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -71,7 +73,7 @@ public class IdempotencyService(DbContext db, IOptions<IntegrationsOptions> opti
         if (existing is not null)
         {
             return existing.RequestDigest == request.RequestDigest
-                ? new IdempotencyExecution(existing.StatusCode, existing.ResponseJson, Replayed: true, Conflict: false, existing.DocumentId)
+                ? new IdempotencyExecution(existing.StatusCode, existing.ResponseJson, Replayed: true, Conflict: false, existing.DocumentId, existing.Id)
                 : IdempotencyExecution.ConflictResponse;
         }
 
@@ -81,7 +83,9 @@ public class IdempotencyService(DbContext db, IOptions<IntegrationsOptions> opti
             var outcome = await mutation(cancellationToken);
             var record = new IdempotencyRecord
             {
-                Id = Guid.NewGuid(),
+                // The caller-supplied id becomes the public operation id so
+                // finalize responses can reference it for status checks.
+                Id = request.OperationId ?? Guid.NewGuid(),
                 TokenId = request.TokenId,
                 OwnerId = request.OwnerId,
                 Key = request.Key,
@@ -97,7 +101,7 @@ public class IdempotencyService(DbContext db, IOptions<IntegrationsOptions> opti
             db.Set<IdempotencyRecord>().Add(record);
             await db.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
-            return new IdempotencyExecution(record.StatusCode, record.ResponseJson, Replayed: false, Conflict: false, record.DocumentId);
+            return new IdempotencyExecution(record.StatusCode, record.ResponseJson, Replayed: false, Conflict: false, record.DocumentId, record.Id);
         }
         catch (Exception ex) when (IsUniqueViolation(ex))
         {
@@ -111,7 +115,7 @@ public class IdempotencyService(DbContext db, IOptions<IntegrationsOptions> opti
             }
 
             return winner.RequestDigest == request.RequestDigest
-                ? new IdempotencyExecution(winner.StatusCode, winner.ResponseJson, Replayed: true, Conflict: false, winner.DocumentId)
+                ? new IdempotencyExecution(winner.StatusCode, winner.ResponseJson, Replayed: true, Conflict: false, winner.DocumentId, winner.Id)
                 : IdempotencyExecution.ConflictResponse;
         }
     }

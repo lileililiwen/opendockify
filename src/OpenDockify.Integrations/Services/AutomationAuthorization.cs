@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OpenDockify.Integrations.Configuration;
@@ -101,9 +102,24 @@ public sealed class ServiceTokenHandler(
         return AuthenticateResult.Success(ticket);
     }
 
-    protected override Task HandleChallengeAsync(AuthenticationProperties properties)
+    protected override async Task HandleChallengeAsync(AuthenticationProperties properties)
     {
+        // Structured 401 so machine clients parse auth failures like any other
+        // automation error.
         Response.Headers.WWWAuthenticate = $"{Scheme.Name} realm=\"opendockify-automation\"";
-        return base.HandleChallengeAsync(properties);
+        await AutomationAuthFeedback.WriteChallengeAsync(Response);
+    }
+
+    protected override async Task HandleForbiddenAsync(AuthenticationProperties properties)
+    {
+        // Scope denials land here because every automation policy names the
+        // ServiceToken scheme; the required scope is read from the endpoint's
+        // authorization metadata when available.
+        var requirement = Context.GetEndpoint()?.Metadata
+            .GetMetadata<IAuthorizeData>()?.Policy;
+        var scope = requirement?.StartsWith("automation:", StringComparison.Ordinal) == true
+            ? requirement["automation:".Length..]
+            : "unknown";
+        await AutomationAuthFeedback.WriteForbiddenAsync(Response, scope);
     }
 }

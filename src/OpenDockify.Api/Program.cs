@@ -81,6 +81,15 @@ builder.Services.AddRateLimiter(options =>
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     options.OnRejected = async (context, cancellationToken) =>
     {
+        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        if (context.HttpContext.Request.Path.StartsWithSegments("/api/v1/automation"))
+        {
+            await context.HttpContext.Response.WriteAsJsonAsync(
+                new { error = new { code = "rate_limited", message = "Too many automation requests. Slow down and retry later.", fields = (object?)null } },
+                cancellationToken);
+            return;
+        }
+
         await context.HttpContext.Response.WriteAsJsonAsync(
             new { error = "Too many authentication attempts. Try again later." },
             cancellationToken);

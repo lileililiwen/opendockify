@@ -78,6 +78,7 @@ Success — `201 Created`, body shape (stable contract):
 ```json
 {
   "documentId": "aa00...",
+  "operationId": "bb11...",
   "templateId": "0f0e...",
   "templateName": "Loan IOU",
   "title": "Loan IOU",
@@ -114,8 +115,12 @@ Validation failures return `422` with machine-readable field errors and create n
 ```
 
 Other codes: `missing_idempotency_key` (400), `invalid_idempotency_key` (400),
-`invalid_request` (400), `not_found` (404), `conflict_idempotency_key` (409),
+`invalid_request` (400), `token_invalid` (401), `forbidden_scope` (403),
+`not_found` (404), `conflict_idempotency_key` (409), `rate_limited` (429),
 `render_error` (500).
+
+Use the returned `operationId` with `GET /api/v1/automation/operations/{id}`
+to check an operation later. All timestamps are UTC ISO-8601 with a `Z` offset.
 
 ---
 

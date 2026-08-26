@@ -148,6 +148,7 @@ public sealed class AutomationIdempotencyTests : IDisposable
     {
         var payload = new AutomationDocumentPayload(
             Guid.Parse("00000000-0000-0000-0000-000000000001"),
+            Guid.Parse("00000000-0000-0000-0000-000000000004"),
             Guid.Parse("00000000-0000-0000-0000-000000000002"),
             "Loan IOU",
             "Loan IOU",
@@ -156,7 +157,7 @@ public sealed class AutomationIdempotencyTests : IDisposable
             new DateTime(2026, 8, 26, 0, 0, 0, DateTimeKind.Utc));
 
         Assert.Equal(
-            """{"documentId":"00000000-0000-0000-0000-000000000001","templateId":"00000000-0000-0000-0000-000000000002","templateName":"Loan IOU","title":"Loan IOU","contentSha256":"a1b2c3","warnings":[],"createdAtUtc":"2026-08-26T00:00:00Z"}""",
+            """{"documentId":"00000000-0000-0000-0000-000000000001","operationId":"00000000-0000-0000-0000-000000000004","templateId":"00000000-0000-0000-0000-000000000002","templateName":"Loan IOU","title":"Loan IOU","contentSha256":"a1b2c3","warnings":[],"createdAtUtc":"2026-08-26T00:00:00Z"}""",
             JsonSerializer.Serialize(payload, AutomationTestHarness.SerializerOptions));
     }
 
