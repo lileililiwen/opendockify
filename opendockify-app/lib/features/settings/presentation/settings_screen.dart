@@ -35,6 +35,12 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => context.push('/connect'),
           ),
           ListTile(
+            leading: const Icon(Icons.hub_outlined),
+            title: const Text('Integrations'),
+            subtitle: const Text('Service tokens and webhooks'),
+            onTap: () => context.push('/integrations'),
+          ),
+          ListTile(
             leading: const Icon(Icons.info_outline),
             title: const Text('About & Legal'),
             onTap: () => _showAbout(context),

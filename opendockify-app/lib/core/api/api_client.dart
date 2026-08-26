@@ -6,6 +6,7 @@ import '../models/admin.dart';
 import '../models/ai.dart';
 import '../models/auth.dart';
 import '../models/document.dart';
+import '../models/integrations.dart';
 import '../models/interview.dart';
 import '../models/template_dto.dart';
 import 'api_error.dart';
@@ -489,6 +490,77 @@ class ApiClient {
       () => _dio.get('/api/admin/ai-usage', queryParameters: {'limit': limit}),
     );
     return _asList(data).map((e) => AiUsageEntry.fromJson(_asMap(e))).toList();
+  }
+
+
+  // ---- Integrations management ----
+
+  Future<List<ServiceTokenView>> listTokens() async {
+    final data = await _guard(() => _dio.get<dynamic>('/api/integrations/tokens'));
+    return _asList(data).map((e) => ServiceTokenView.fromJson(_asMap(e))).toList();
+  }
+
+  Future<ServiceTokenIssuance> createToken({
+    required String name,
+    required List<String> scopes,
+    required int expiresInDays,
+  }) async {
+    final data = await _guard(() => _dio.post<dynamic>(
+          '/api/integrations/tokens',
+          data: {'name': name, 'scopes': scopes, 'expiresInDays': expiresInDays},
+        ));
+    return ServiceTokenIssuance.fromJson(_asMap(data));
+  }
+
+  Future<void> revokeToken(String id) async {
+    await _guard(() => _dio.delete<void>('/api/integrations/tokens/$id'));
+  }
+
+  Future<List<WebhookSubscriptionView>> listSubscriptions() async {
+    final data =
+        await _guard(() => _dio.get<dynamic>('/api/integrations/webhooks/subscriptions'));
+    return _asList(data).map((e) => WebhookSubscriptionView.fromJson(_asMap(e))).toList();
+  }
+
+  Future<SubscriptionCreated> createSubscription({
+    required String url,
+    required List<String> eventTypes,
+  }) async {
+    final data = await _guard(() => _dio.post<dynamic>(
+          '/api/integrations/webhooks/subscriptions',
+          data: {'url': url, 'eventTypes': eventTypes},
+        ));
+    return SubscriptionCreated.fromJson(_asMap(data));
+  }
+
+  Future<String> rotateSubscriptionSecret(String id) async {
+    final data = await _guard(
+      () => _dio.post<dynamic>('/api/integrations/webhooks/subscriptions/$id/rotate-secret'),
+    );
+    return _asMap(data)['secret']?.toString() ?? '';
+  }
+
+  Future<void> deleteSubscription(String id) async {
+    await _guard(
+      () => _dio.delete<void>('/api/integrations/webhooks/subscriptions/$id'),
+    );
+  }
+
+  Future<List<WebhookDeliveryView>> listDeliveries({String? subscriptionId, int limit = 50}) async {
+    final data = await _guard(() => _dio.get<dynamic>(
+          '/api/integrations/webhooks/deliveries',
+          queryParameters: {
+            'subscriptionId': ?subscriptionId,
+            'limit': limit,
+          },
+        ));
+    return _asList(data).map((e) => WebhookDeliveryView.fromJson(_asMap(e))).toList();
+  }
+
+  Future<void> retryDelivery(String id) async {
+    await _guard(
+      () => _dio.post<dynamic>('/api/integrations/webhooks/deliveries/$id/retry'),
+    );
   }
 
   // ---- Helpers ----
