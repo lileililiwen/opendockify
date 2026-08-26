@@ -64,7 +64,7 @@ public static class AuthSecurityOptions
     public const string RegistrationPolicyName = "auth-registration";
     public const int DefaultLoginAttemptsPerMinute = 10;
     public const int DefaultRegistrationAttemptsPerHour = 5;
-    private const int MaxAttempts = 10_000;
+    private const int _maxAttempts = 10_000;
 
     public static bool IsRegistrationAllowed(IConfiguration configuration)
     {
@@ -83,7 +83,7 @@ public static class AuthSecurityOptions
 
     private static int GetPositiveBoundedInt(string? raw, int fallback)
     {
-        return int.TryParse(raw, out var value) && value > 0 && value <= MaxAttempts
+        return int.TryParse(raw, out var value) && value > 0 && value <= _maxAttempts
             ? value
             : fallback;
     }
