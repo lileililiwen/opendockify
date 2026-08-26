@@ -37,6 +37,16 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     public DbSet<OpenDockify.Esign.Models.SigningAuditLog> SigningAuditLogs => Set<OpenDockify.Esign.Models.SigningAuditLog>();
 
+    public DbSet<OpenDockify.Integrations.Models.ServiceToken> ServiceTokens => Set<OpenDockify.Integrations.Models.ServiceToken>();
+
+    public DbSet<OpenDockify.Integrations.Models.IdempotencyRecord> IdempotencyRecords => Set<OpenDockify.Integrations.Models.IdempotencyRecord>();
+
+    public DbSet<OpenDockify.Integrations.Models.WebhookSubscription> WebhookSubscriptions => Set<OpenDockify.Integrations.Models.WebhookSubscription>();
+
+    public DbSet<OpenDockify.Integrations.Models.OutboxEvent> OutboxEvents => Set<OpenDockify.Integrations.Models.OutboxEvent>();
+
+    public DbSet<OpenDockify.Integrations.Models.WebhookDelivery> WebhookDeliveries => Set<OpenDockify.Integrations.Models.WebhookDelivery>();
+
 
 
 
@@ -62,6 +72,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(OpenDockify.AiAssist.Models.AiUsageLog).Assembly);
         // Added by esign-extensions.
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(OpenDockify.Esign.Models.Signer).Assembly);
+        // Added by automation-api-webhooks.
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(OpenDockify.Integrations.Models.ServiceToken).Assembly);
         base.OnModelCreating(modelBuilder);
     }
 }
