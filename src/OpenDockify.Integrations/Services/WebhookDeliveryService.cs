@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -20,7 +21,22 @@ public sealed record WebhookDeliveryView(
     string? BlockedReason,
     DateTime CreatedAtUtc,
     DateTime? NextAttemptAtUtc,
-    DateTime? DeliveredAtUtc);
+    DateTime? DeliveredAtUtc,
+    IReadOnlyList<DeliveryAttempt> Attempts);
+
+/// <summary>One recorded delivery attempt (redacted).</summary>
+public sealed record DeliveryAttempt(DateTime AtUtc, int? StatusCode, string? Error);
+
+/// <summary>Plan-failure reasons that are transient and keep auto-retrying.</summary>
+public static class TransientDeliveryBlockReasons
+{
+    public static readonly IReadOnlyCollection<string> All = ["dns-resolution-failed"];
+
+    public static bool IsTransient(string? blockedReason)
+    {
+        return blockedReason is not null && All.Contains(blockedReason);
+    }
+}
 
 public sealed record WebhookSubscriptionView(
     Guid Id,
@@ -43,6 +59,9 @@ public sealed partial class WebhookDeliveryService(
     ILogger<WebhookDeliveryService>? logger = null)
 {
     private readonly ILogger<WebhookDeliveryService> _logger = logger ?? NullLogger<WebhookDeliveryService>.Instance;
+
+    private static readonly System.Text.Json.JsonSerializerOptions _jsonOptions =
+        new(System.Text.Json.JsonSerializerDefaults.Web);
 
     public async Task<int> EnqueuePendingEventsAsync(CancellationToken cancellationToken = default)
     {
@@ -134,11 +153,32 @@ public sealed partial class WebhookDeliveryService(
         var plan = await routePlanner.PlanAsync(new Uri(subscription.Url), cancellationToken);
         if (!plan.Allowed || plan.Address is null)
         {
-            // Blocked before any bytes leave the host; the safe reason is recorded.
+            if (TransientDeliveryBlockReasons.IsTransient(plan.BlockedReason))
+            {
+                // Unresolvable destinations are usually temporary: keep the
+                // delivery inside the normal retry budget instead of blocking.
+                delivery.AttemptCount++;
+                AppendAttempt(delivery, DateTime.UtcNow, null, plan.BlockedReason);
+                delivery.State = delivery.AttemptCount >= options.Value.Webhooks.GetMaxAttempts()
+                    ? WebhookDeliveryState.Exhausted
+                    : WebhookDeliveryState.Pending;
+                delivery.LastError = plan.BlockedReason;
+                delivery.NextAttemptAtUtc = delivery.State == WebhookDeliveryState.Pending
+                    ? DateTime.UtcNow.Add(ComputeBackoff(delivery.AttemptCount, options.Value.Webhooks.GetBaseRetryDelaySeconds()))
+                    : null;
+                delivery.LeaseOwner = null;
+                delivery.LeaseExpiresAtUtc = null;
+                delivery.UpdatedAtUtc = DateTime.UtcNow;
+                await db.SaveChangesAsync(cancellationToken);
+                return;
+            }
+
+            // Policy violation: blocked before any bytes leave the host.
             delivery.State = WebhookDeliveryState.Blocked;
             delivery.BlockedReason = plan.BlockedReason;
             delivery.LastError = null;
             delivery.NextAttemptAtUtc = null;
+            AppendAttempt(delivery, DateTime.UtcNow, null, $"blocked:{plan.BlockedReason}");
             delivery.UpdatedAtUtc = DateTime.UtcNow;
             await db.SaveChangesAsync(cancellationToken);
             return;
@@ -187,10 +227,32 @@ public sealed partial class WebhookDeliveryService(
                 DateTime.UtcNow.Add(ComputeBackoff(delivery.AttemptCount, options.Value.Webhooks.GetBaseRetryDelaySeconds()));
         }
 
+        AppendAttempt(delivery, DateTime.UtcNow, outcome.StatusCode, outcome.Error);
         delivery.LeaseOwner = null;
         delivery.LeaseExpiresAtUtc = null;
         await db.SaveChangesAsync(cancellationToken);
         Log.Attempted(_logger, delivery.Id, delivery.State, outcome.StatusCode);
+    }
+
+    private static void AppendAttempt(WebhookDelivery delivery, DateTime atUtc, int? statusCode, string? error)
+    {
+        List<DeliveryAttempt> attempts;
+        try
+        {
+            attempts = System.Text.Json.JsonSerializer.Deserialize<List<DeliveryAttempt>>(delivery.AttemptLog, _jsonOptions) ?? [];
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            attempts = [];
+        }
+
+        attempts.Add(new DeliveryAttempt(atUtc, statusCode, error));
+        if (attempts.Count > 5)
+        {
+            attempts.RemoveRange(0, attempts.Count - 5);
+        }
+
+        delivery.AttemptLog = System.Text.Json.JsonSerializer.Serialize(attempts, _jsonOptions);
     }
 
     /// <summary>Owner-scoped manual retry of a terminal or delayed delivery.</summary>
@@ -210,6 +272,30 @@ public sealed partial class WebhookDeliveryService(
         delivery.UpdatedAtUtc = DateTime.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
         return true;
+    }
+
+    /// <summary>
+    /// Owner-scoped secret rotation: returns the new clear secret exactly once;
+    /// URL and event types are untouched and later deliveries sign with the new
+    /// secret. Returns null when the subscription does not belong to the owner.
+    /// </summary>
+    public async Task<string?> RotateSecretAsync(
+        Guid ownerId,
+        Guid subscriptionId,
+        CancellationToken cancellationToken = default)
+    {
+        var subscription = await db.Set<WebhookSubscription>()
+            .SingleOrDefaultAsync(x => x.Id == subscriptionId && x.OwnerId == ownerId, cancellationToken);
+        if (subscription is null)
+        {
+            return null;
+        }
+
+        var secret = $"whsec_{Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
+            .Replace('+', '-').Replace('/', '_').TrimEnd('=')}";
+        subscription.Secret = secret;
+        await db.SaveChangesAsync(cancellationToken);
+        return secret;
     }
 
     /// <summary>Removes terminal deliveries past the retention window.</summary>
@@ -236,22 +322,52 @@ public sealed partial class WebhookDeliveryService(
             query = query.Where(x => x.SubscriptionId == filter);
         }
 
-        return await query
+        var rows = await query
             .OrderByDescending(x => x.CreatedAtUtc)
             .Take(limit)
-            .Select(x => new WebhookDeliveryView(
+            .Select(x => new
+            {
                 x.Id,
                 x.SubscriptionId,
                 x.EventId,
-                x.State.ToString(),
+                State = x.State.ToString(),
                 x.AttemptCount,
                 x.LastStatusCode,
                 x.LastError,
                 x.BlockedReason,
                 x.CreatedAtUtc,
                 x.NextAttemptAtUtc,
-                x.DeliveredAtUtc))
+                x.DeliveredAtUtc,
+                x.AttemptLog,
+            })
             .ToListAsync(cancellationToken);
+
+        return rows.Select(x => new WebhookDeliveryView(
+            x.Id,
+            x.SubscriptionId,
+            x.EventId,
+            x.State,
+            x.AttemptCount,
+            x.LastStatusCode,
+            x.LastError,
+            x.BlockedReason,
+            x.CreatedAtUtc,
+            x.NextAttemptAtUtc,
+            x.DeliveredAtUtc,
+            ParseAttempts(x.AttemptLog))).ToList();
+    }
+
+    private static List<DeliveryAttempt> ParseAttempts(string attemptLog)
+    {
+        try
+        {
+            var attempts = System.Text.Json.JsonSerializer.Deserialize<List<DeliveryAttempt>>(attemptLog, _jsonOptions);
+            return attempts ?? [];
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return [];
+        }
     }
 
     public static TimeSpan ComputeBackoff(int attemptJustMade, int baseDelaySeconds)

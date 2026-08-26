@@ -67,6 +67,8 @@ public sealed class AutomationFlowTests : IDisposable
         Assert.Contains(first.DocumentId.Value.ToString(), @event.PayloadJson);
         var record = await _db.IdempotencyRecords.SingleAsync();
         Assert.Equal(201, record.StatusCode);
+        var payload = JsonSerializer.Deserialize<JsonElement>(first.ResponseJson);
+        Assert.Equal(record.Id, Guid.Parse(payload.GetProperty("operationId").GetString()!));
 
         var replay = await FinalizeAsync(_ownerA, "op-1", command);
         Assert.Equal(AutomationFinalizeKind.Replay, replay.Kind);

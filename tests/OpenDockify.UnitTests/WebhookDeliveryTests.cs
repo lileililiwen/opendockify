@@ -300,6 +300,90 @@ public sealed class WebhookDeliveryServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Rotation_returns_new_secret_once_and_preserves_the_subscription()
+    {
+        var (delivery, subscription, @event) = await SeedDeliveryAsync();
+        var originalSecret = subscription.Secret;
+
+        var rotated = await _service.RotateSecretAsync(_ownerId, subscription.Id);
+        Assert.NotNull(rotated);
+        Assert.StartsWith("whsec_", rotated);
+        Assert.NotEqual(originalSecret, rotated);
+
+        await _db.Entry(subscription).ReloadAsync();
+        Assert.Equal(rotated, subscription.Secret);
+        Assert.Equal("https://hooks.example.com/receiver", subscription.Url);
+        Assert.Equal(AutomationEvents.DocumentFinalized, subscription.EventTypes);
+
+        // Owner-scoped: other owners cannot rotate.
+        Assert.Null(await _service.RotateSecretAsync(Guid.NewGuid(), subscription.Id));
+
+        // Subsequent deliveries verify against the NEW secret only.
+        await _service.DeliverAsync(delivery);
+        var attempt = Assert.Single(_sender.Attempts);
+        var signature = attempt.Headers["X-OpenDockify-Signature"];
+        var timestampPart = signature.Split(',', StringSplitOptions.TrimEntries)[0];
+        var t = long.Parse(timestampPart.AsSpan(2), CultureInfo.InvariantCulture);
+        Assert.True(WebhookSigner.Verify(rotated, @event.Id.ToString(), t, @event.PayloadJson, signature, 600, t));
+        Assert.False(WebhookSigner.Verify(originalSecret, @event.Id.ToString(), t, @event.PayloadJson, signature, 600, t));
+    }
+
+    [Fact]
+    public async Task Dns_failures_keep_retrying_instead_of_blocking()
+    {
+        var subscription = new WebhookSubscription
+        {
+            Id = Guid.NewGuid(),
+            OwnerId = _ownerId,
+            Url = "https://missing.invalid/hook",
+            Secret = "whsec_transient",
+            EventTypes = AutomationEvents.DocumentFinalized,
+            IsActive = true,
+        };
+        _db.WebhookSubscriptions.Add(subscription);
+        _db.OutboxEvents.Add(SeedEvent(_ownerId));
+        await _db.SaveChangesAsync();
+        await _service.EnqueuePendingEventsAsync();
+        var delivery = await _db.WebhookDeliveries.SingleAsync(x => x.SubscriptionId == subscription.Id);
+
+        await _service.DeliverAsync(delivery);
+
+        // Unresolvable destination is transient: pending with a scheduled retry,
+        // not permanently blocked.
+        Assert.Equal(WebhookDeliveryState.Pending, delivery.State);
+        Assert.Null(delivery.BlockedReason);
+        Assert.NotNull(delivery.NextAttemptAtUtc);
+        Assert.Contains("dns-resolution-failed", delivery.LastError);
+
+        // Policy violations still block permanently (covered by the
+        // prohibited-destination test); the attempt log records both kinds.
+        var view = (await _service.ListDeliveriesAsync(_ownerId, subscription.Id, 10)).Single();
+        Assert.Single(view.Attempts);
+        Assert.Equal("dns-resolution-failed", view.Attempts[^1].Error);
+    }
+
+    [Fact]
+    public async Task Attempt_timeline_is_recorded_and_exposed_without_secrets()
+    {
+        var (delivery, subscription, _) = await SeedDeliveryAsync();
+        _sender.RespondWith(() => new WebhookSendOutcome(false, 500, "server error"));
+
+        delivery.NextAttemptAtUtc = DateTime.UtcNow.AddMinutes(-1);
+        await _service.DeliverAsync(delivery);
+        delivery.NextAttemptAtUtc = DateTime.UtcNow.AddMinutes(-1);
+        await _service.DeliverAsync(delivery);
+
+        var views = await _service.ListDeliveriesAsync(_ownerId, subscription.Id, 10);
+        var view = views.Single(x => x.Id == delivery.Id);
+        Assert.Equal(2, view.Attempts.Count);
+        Assert.All(view.Attempts, x => Assert.Equal(500, x.StatusCode));
+
+        var json = System.Text.Json.JsonSerializer.Serialize(view, AutomationTestHarness.SerializerOptions);
+        Assert.DoesNotContain(subscription.Secret, json, StringComparison.Ordinal);
+        Assert.DoesNotContain("signature", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Outbox_events_fan_out_once_per_active_subscription()
     {
         var matching = new WebhookSubscription

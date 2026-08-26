@@ -168,6 +168,18 @@ public static class IntegrationManagementEndpoints
             return rows > 0 ? Results.NoContent() : Results.NotFound(new { error = "Subscription not found." });
         });
 
+        group.MapPost("/webhooks/subscriptions/{id:guid}/rotate-secret", async (
+            HttpContext http,
+            Guid id,
+            WebhookDeliveryService deliveries,
+            CancellationToken ct) =>
+        {
+            var secret = await deliveries.RotateSecretAsync(CurrentUserId(http), id, ct);
+            return secret is null
+                ? Results.Json(new { error = "Subscription not found." }, statusCode: StatusCodes.Status404NotFound)
+                : Results.Ok(new { secret });
+        });
+
         group.MapGet("/webhooks/deliveries", async (
             HttpContext http,
             WebhookDeliveryService deliveries,

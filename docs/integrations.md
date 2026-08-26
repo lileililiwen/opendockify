@@ -6,6 +6,33 @@ mutations, and signed webhook delivery with SSRF-safe outbound validation.
 
 All automation requests act **only** on the token owner's resources.
 
+A machine-readable OpenAPI 3.1 contract is served at
+`GET /api/v1/automation/openapi.json` (no auth) and committed at
+[`docs/openapi.json`](openapi.json).
+
+## Quickstart (curl)
+
+```bash
+BASE=http://localhost:8080   # your instance
+
+# 1. User JWT (interactive admin)
+JWT=$(curl -s -X POST $BASE/api/auth/login -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"..."}' | jq -r .token)
+
+# 2. Service token (shown once — store it)
+CLEAR=$(curl -s -X POST $BASE/api/integrations/tokens -H "Authorization: Bearer $JWT" \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"ci","scopes":["templates:read","documents:write","operations:read"],"expiresInDays":90}' \
+  | jq -r .clearToken)
+
+# 3. Pick a template and finalize with an idempotency key
+TPL=$(curl -s $BASE/api/v1/automation/templates -H "Authorization: Bearer $CLEAR" | jq -r '.[0].id')
+curl -s -X POST $BASE/api/v1/automation/finalize \
+  -H "Authorization: Bearer $CLEAR" -H 'Idempotency-Key: my-first-op-001' \
+  -H 'Content-Type: application/json' \
+  -d "{"templateId":"$TPL","values":{}}" | jq .
+```
+
 ---
 
 ## 1. Service tokens
@@ -78,6 +105,7 @@ Success — `201 Created`, body shape (stable contract):
 ```json
 {
   "documentId": "aa00...",
+  "operationId": "bb11...",
   "templateId": "0f0e...",
   "templateName": "Loan IOU",
   "title": "Loan IOU",
@@ -114,8 +142,12 @@ Validation failures return `422` with machine-readable field errors and create n
 ```
 
 Other codes: `missing_idempotency_key` (400), `invalid_idempotency_key` (400),
-`invalid_request` (400), `not_found` (404), `conflict_idempotency_key` (409),
+`invalid_request` (400), `token_invalid` (401), `forbidden_scope` (403),
+`not_found` (404), `conflict_idempotency_key` (409), `rate_limited` (429),
 `render_error` (500).
+
+Use the returned `operationId` with `GET /api/v1/automation/operations/{id}`
+to check an operation later. All timestamps are UTC ISO-8601 with a `Z` offset.
 
 ---
 
@@ -137,6 +169,8 @@ Content-Type: application/json
 - `201` returns the signing **secret exactly once**: `{"subscription": {...}, "secret": "whsec_..."}`.
 - Destinations are validated at creation and re-validated on every attempt (see §5).
 - `GET /api/integrations/webhooks/subscriptions` — list (no secrets).
+- `POST /api/integrations/webhooks/subscriptions/{id}/rotate-secret` — returns the
+  new secret exactly once; the old secret stops working immediately.
 - `DELETE /api/integrations/webhooks/subscriptions/{id}` — remove.
 - Limits: at most `Integrations:MaxSubscriptionsPerOwner` (default 10) per owner.
 
@@ -212,7 +246,11 @@ loopback · link-local (incl. cloud metadata `169.254.169.254`) · private
 (RFC1918, `fc00::/7`) · shared address space (`100.64/10`) · multicast /
 reserved / broadcast · unspecified.
 
-Blocked destinations are recorded as `Blocked` with the reason and never retried automatically.
+Policy violations (prohibited ranges, non-HTTPS) are recorded as `Blocked` with
+the reason and never retried automatically. Transient failures — DNS resolution
+failures, timeouts, connection errors — stay `Pending` and keep retrying inside
+the attempt budget. Each delivery also keeps a bounded timeline of its last five
+attempts (timestamp, status code or error), exposed via the deliveries listing.
 
 Deployers can punch explicit holes for internal receivers:
 
@@ -244,6 +282,18 @@ can only reach intended segments.
 | `Integrations:Webhooks:Allowlist` | `[]` | Hostnames / CIDRs exempt from prohibited-range blocking |
 | `Integrations:IdempotencyRetentionDays` | `30` | Replay window for operations |
 | `Integrations:TokenPepper` | derived from `Jwt:Secret` | Keying material for token verifiers |
+
+## Troubleshooting
+
+| Symptom | Cause / fix |
+|---|---|
+| `401 token_invalid` on every call | Token expired or revoked — issue a new one; clear tokens are shown once at creation. |
+| `403 forbidden_scope` | Token lacks the endpoint's scope — create a token with the scope listed per endpoint above. |
+| `409 conflict_idempotency_key` | Same key used with a different body — use a fresh key per logical operation. |
+| `429 rate_limited` | Automation limit is 60 req/min per token — back off and retry; replays still count. |
+| Webhook signature fails at receiver | Verify against the exact raw bytes, `eventId`, and `t` from the header; clock skew > 5 min also rejects — sync NTP. Rotate the secret if it leaked (`rotate-secret`). |
+| Delivery stuck `Blocked` | The destination violates outbound-safety (see §4) — fix the URL or allowlist the host, then `POST …/deliveries/{id}/retry`. |
+| Delivery `Exhausted` | Receiver kept failing through the retry budget — fix the receiver, then manual retry resets attempts. |
 
 Secrets never appear in listings, logs, or delivery records: token verifiers,
 clear tokens, subscription secrets, request bodies, and signatures are all excluded.
