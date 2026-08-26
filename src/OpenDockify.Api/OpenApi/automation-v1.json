@@ -1,0 +1,292 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "OpenDockify Automation API",
+    "version": "v1",
+    "description": "Machine surface for template discovery, preview, idempotent document finalization, operation status, and owner-scoped document retrieval. Authenticate with a service token: Authorization: Bearer odk_<prefix>_<secret>. Mutations require an Idempotency-Key header. All errors use {error:{code,message,fields}}. All timestamps are UTC ISO-8601 with a Z offset."
+  },
+  "servers": [{ "url": "/" }],
+  "security": [{ "serviceToken": [] }],
+  "tags": [
+    { "name": "templates", "description": "Usable templates" },
+    { "name": "documents", "description": "Preview and finalize documents" },
+    { "name": "operations", "description": "Operation status" }
+  ],
+  "paths": {
+    "/api/v1/automation/templates": {
+      "get": {
+        "tags": ["templates"],
+        "summary": "List templates the token owner can generate from",
+        "responses": {
+          "200": {
+            "description": "Template list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["id", "name", "category", "description", "currentRevision"],
+                  "properties": {
+                    "id": { "type": "string", "format": "uuid" },
+                    "name": { "type": "string" },
+                    "category": { "type": "string" },
+                    "description": { "type": "string" },
+                    "currentRevision": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/AuthError" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      }
+    },
+    "/api/v1/automation/preview": {
+      "post": {
+        "tags": ["documents"],
+        "summary": "Validate answers and render a preview (no document created)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/FinalizeRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Rendered preview",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "renderedText": { "type": ["string", "null"] },
+                    "templateName": { "type": ["string", "null"] },
+                    "warnings": { "type": "array", "items": { "type": "string" } }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/Error" },
+          "422": { "$ref": "#/components/responses/ValidationError" }
+        }
+      }
+    },
+    "/api/v1/automation/finalize": {
+      "post": {
+        "tags": ["documents"],
+        "summary": "Finalize one document (idempotent)",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string", "minLength": 8, "maxLength": 128 },
+            "description": "Opaque key bound to token+route+body digest for the retention window. Same key+body replays the original response; same key+different body conflicts 409."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/FinalizeRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Document finalized (or replayed with these exact bytes)",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/FinalizeResult" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error" },
+          "409": { "$ref": "#/components/responses/Error" },
+          "422": { "$ref": "#/components/responses/ValidationError" },
+          "500": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/v1/automation/operations/{id}": {
+      "get": {
+        "tags": ["operations"],
+        "summary": "Status of one finalize operation",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation view",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "operationId": { "type": "string", "format": "uuid" },
+                    "route": { "type": "string" },
+                    "outcome": { "type": "string", "enum": ["completed", "failed"] },
+                    "statusCode": { "type": "integer" },
+                    "documentId": { "type": ["string", "null"], "format": "uuid" },
+                    "createdAtUtc": { "type": "string", "format": "date-time" },
+                    "expiresAtUtc": { "type": "string", "format": "date-time" }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/v1/automation/documents/{id}": {
+      "get": {
+        "tags": ["documents"],
+        "summary": "Owner-visible document metadata",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Document metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string", "format": "uuid" },
+                    "title": { "type": "string" },
+                    "templateId": { "type": "string", "format": "uuid" },
+                    "templateName": { "type": "string" },
+                    "isArchived": { "type": "boolean" },
+                    "status": { "type": "string" },
+                    "signingStatus": { "type": "string" },
+                    "contentSha256": { "type": ["string", "null"] },
+                    "createdAtUtc": { "type": "string", "format": "date-time" },
+                    "pdfUrl": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/v1/automation/documents/{id}/pdf": {
+      "get": {
+        "tags": ["documents"],
+        "summary": "Download the finalized PDF",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "PDF bytes",
+            "content": { "application/pdf": { "schema": { "type": "string", "format": "binary" } } }
+          },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "serviceToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Service token: odk_<prefix>_<secret>, issued once via /api/integrations/tokens"
+      }
+    },
+    "schemas": {
+      "FinalizeRequest": {
+        "type": "object",
+        "required": ["templateId"],
+        "properties": {
+          "templateId": { "type": "string", "format": "uuid" },
+          "values": {
+            "type": "object",
+            "additionalProperties": { "type": "string" },
+            "description": "Field name to string value map"
+          },
+          "selectedClauseIds": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "FinalizeResult": {
+        "type": "object",
+        "required": ["documentId", "operationId", "templateId", "templateName", "title", "warnings", "createdAtUtc"],
+        "properties": {
+          "documentId": { "type": "string", "format": "uuid" },
+          "operationId": { "type": "string", "format": "uuid" },
+          "templateId": { "type": "string", "format": "uuid" },
+          "templateName": { "type": "string" },
+          "title": { "type": "string" },
+          "contentSha256": { "type": ["string", "null"] },
+          "warnings": { "type": "array", "items": { "type": "string" } },
+          "createdAtUtc": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": ["code", "message"],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "missing_idempotency_key", "invalid_idempotency_key", "invalid_request",
+                  "token_invalid", "forbidden_scope", "not_found",
+                  "conflict_idempotency_key", "rate_limited", "validation_failed",
+                  "template_invalid", "render_error"
+                ]
+              },
+              "message": { "type": "string" },
+              "fields": {
+                "type": ["array", "null"],
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "field": { "type": "string" },
+                    "error": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "AuthError": {
+        "description": "Missing/invalid token or insufficient scope",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+        }
+      },
+      "RateLimited": {
+        "description": "Automation rate limit exceeded",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+        }
+      },
+      "Error": {
+        "description": "Structured error",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+        }
+      },
+      "ValidationError": {
+        "description": "Validation failed; no mutation performed",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+        }
+      }
+    }
+  }
+}

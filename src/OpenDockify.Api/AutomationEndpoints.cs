@@ -23,6 +23,11 @@ public static class AutomationEndpoints
     {
         var group = endpoints.MapGroup("/api/v1/automation").RequireRateLimiting(RateLimitPolicy);
 
+        // Machine-readable contract; unauthenticated so SDK generators can
+        // fetch it before issuing tokens.
+        group.MapGet("/openapi.json", () =>
+            Results.Bytes(AutomationContract.DocumentBytes, "application/json"));
+
         group.MapGet("/templates", async (
             HttpContext http,
             AutomationService automation,
