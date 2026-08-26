@@ -8,6 +8,7 @@ import '../../features/admin/presentation/admin_settings_screen.dart';
 import '../../features/admin/presentation/admin_template_upsert_screen.dart';
 import '../../features/admin/presentation/template_package_import_screen.dart';
 import '../../features/admin/presentation/ai_usage_screen.dart';
+import '../../features/integrations/presentation/integrations_screen.dart';
 import '../../features/auth/application/session_controller.dart';
 import '../../features/auth/presentation/connection_screen.dart';
 import '../../features/auth/presentation/login_screen.dart';
@@ -89,6 +90,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/documents/:id', builder: (context, state) => DocumentDetailScreen(documentId: state.pathParameters['id']!)),
       GoRoute(path: '/documents/:id/reedit', builder: (context, state) => DocumentFillScreen(documentId: state.pathParameters['id']!)),
       GoRoute(path: '/admin', builder: (context, state) => const AdminHomeScreen()),
+      GoRoute(path: '/integrations', builder: (context, state) => const IntegrationsScreen()),
       GoRoute(path: '/admin/settings', builder: (context, state) => const AdminSettingsScreen()),
       GoRoute(path: '/admin/templates/new', builder: (context, state) => const AdminTemplateUpsertScreen()),
       GoRoute(path: '/admin/templates/import', builder: (context, state) => const TemplatePackageImportScreen()),
