@@ -1,0 +1,216 @@
+using System.Security.Claims;
+using System.Text;
+using System.Text.Json;
+using Microsoft.AspNetCore.RateLimiting;
+using OpenDockify.Generation.Models;
+using OpenDockify.Generation.Services;
+using OpenDockify.Integrations.Services;
+
+namespace OpenDockify.Api;
+
+/// <summary>
+/// Versioned automation API for machine clients (service tokens). Every
+/// endpoint requires exactly one token scope; mutations require an
+/// Idempotency-Key header and return stable, replayable JSON bodies.
+/// </summary>
+public static class AutomationEndpoints
+{
+    public const string RateLimitPolicy = "automation-api";
+
+    private static readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
+
+    public static IEndpointRouteBuilder MapAutomationEndpoints(this IEndpointRouteBuilder endpoints)
+    {
+        var group = endpoints.MapGroup("/api/v1/automation").RequireRateLimiting(RateLimitPolicy);
+
+        group.MapGet("/templates", async (
+            HttpContext http,
+            AutomationService automation,
+            CancellationToken ct) =>
+            Results.Ok(await automation.ListTemplatesAsync(OwnerId(http), ct)))
+            .RequireAuthorization(AutomationAuthorization.PolicyFor(AutomationScopes.TemplatesRead));
+
+        group.MapPost("/preview", async (
+            HttpContext http,
+            GenerateDocumentRequest request,
+            AutomationService automation,
+            CancellationToken ct) =>
+        {
+            var result = await automation.PreviewAsync(
+                OwnerId(http),
+                new GenerateCommand(request.TemplateId, request.Values ?? [], request.SelectedClauseIds ?? []),
+                ct);
+            return result.ErrorKind switch
+            {
+                GenerationErrorKind.None => Results.Ok(new
+                {
+                    renderedText = result.RenderedText,
+                    templateName = result.TemplateName,
+                    warnings = result.Warnings,
+                }),
+                GenerationErrorKind.NotFound => ErrorContent(
+                    "not_found", result.Error ?? "Template not found.", null, StatusCodes.Status404NotFound),
+                _ => ErrorContent(
+                    "validation_failed", result.Error ?? "Invalid request.", result.FieldErrors,
+                    StatusCodes.Status422UnprocessableEntity),
+            };
+        })
+        .RequireAuthorization(AutomationAuthorization.PolicyFor(AutomationScopes.DocumentsPreview));
+
+        group.MapPost("/finalize", async (
+            HttpContext http,
+            AutomationService automation,
+            CancellationToken ct) =>
+        {
+            var key = http.Request.Headers["Idempotency-Key"].ToString().Trim();
+            if (key.Length == 0)
+            {
+                return ErrorContent(
+                    "missing_idempotency_key", "The Idempotency-Key header is required.", null,
+                    StatusCodes.Status400BadRequest);
+            }
+
+            // Keys are opaque: bounded length and a conservative character set.
+            if (key.Length is < 8 or > 128 || key.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '-' && c != '_'))
+            {
+                return ErrorContent(
+                    "invalid_idempotency_key", "The Idempotency-Key must be 8-128 ASCII letters, digits, '-', or '_'.", null,
+                    StatusCodes.Status400BadRequest);
+            }
+
+            http.Request.EnableBuffering();
+            using var reader = new StreamReader(
+                http.Request.Body,
+                Encoding.UTF8,
+                detectEncodingFromByteOrderMarks: false,
+                bufferSize: -1,
+                leaveOpen: true);
+            var rawBody = await reader.ReadToEndAsync(ct);
+            http.Request.Body.Position = 0;
+
+            AutomationFinalizeRequest? request;
+            try
+            {
+                request = JsonSerializer.Deserialize<AutomationFinalizeRequest>(rawBody, _jsonOptions);
+            }
+            catch (JsonException)
+            {
+                request = null;
+            }
+
+            if (request is null || request.TemplateId == Guid.Empty)
+            {
+                return ErrorContent(
+                    "invalid_request", "The request body must include a templateId.", null,
+                    StatusCodes.Status400BadRequest);
+            }
+
+            var result = await automation.FinalizeAsync(
+                OwnerId(http),
+                TokenId(http),
+                key,
+                AutomationService.FinalizeRoute,
+                RequestDigests.Compute(Encoding.UTF8.GetBytes(rawBody)),
+                new GenerateCommand(request.TemplateId, request.Values ?? [], request.SelectedClauseIds ?? []),
+                ct);
+
+            return Results.Content(result.ResponseJson, "application/json", Encoding.UTF8, result.StatusCode);
+        })
+        .RequireAuthorization(AutomationAuthorization.PolicyFor(AutomationScopes.DocumentsWrite));
+
+        group.MapGet("/operations/{id:guid}", async (
+            HttpContext http,
+            Guid id,
+            AutomationService automation,
+            CancellationToken ct) =>
+        {
+            var operation = await automation.GetOperationAsync(OwnerId(http), id, ct);
+            return operation is null
+                ? ErrorContent("not_found", "Operation not found.", null, StatusCodes.Status404NotFound)
+                : Results.Ok(operation);
+        })
+        .RequireAuthorization(AutomationAuthorization.PolicyFor(AutomationScopes.OperationsRead));
+
+        group.MapGet("/documents/{id:guid}", async (
+            HttpContext http,
+            Guid id,
+            DocumentService documents,
+            CancellationToken ct) =>
+        {
+            var access = await documents.GetAsync(OwnerId(http), id, ct);
+            return access.NotFound
+                ? ErrorContent("not_found", "Document not found.", null, StatusCodes.Status404NotFound)
+                : Results.Ok(ToDocumentView(access.Value!));
+        })
+        .RequireAuthorization(AutomationAuthorization.PolicyFor(AutomationScopes.DocumentsRead));
+
+        group.MapGet("/documents/{id:guid}/pdf", async (
+            HttpContext http,
+            Guid id,
+            DocumentService documents,
+            CancellationToken ct) =>
+        {
+            var access = await documents.GetAsync(OwnerId(http), id, ct);
+            if (access.NotFound)
+            {
+                return ErrorContent("not_found", "Document not found.", null, StatusCodes.Status404NotFound);
+            }
+
+            var path = access.Value!.Document.PdfPath;
+            return File.Exists(path)
+                ? Results.File(path, "application/pdf", fileDownloadName: $"{id}.pdf", enableRangeProcessing: false)
+                : ErrorContent("not_found", "PDF file is missing.", null, StatusCodes.Status404NotFound);
+        })
+        .RequireAuthorization(AutomationAuthorization.PolicyFor(AutomationScopes.DocumentsRead));
+
+        return endpoints;
+    }
+
+    internal static object ToDocumentView(DocumentLibraryDetail detail)
+    {
+        return new
+        {
+            detail.Document.Id,
+            Title = detail.Title,
+            detail.Document.TemplateId,
+            TemplateName = detail.TemplateName,
+            detail.Document.IsArchived,
+            Status = detail.Document.Status.ToString(),
+            SigningStatus = detail.Document.SigningStatus.ToString(),
+            detail.Document.ContentSha256,
+            detail.Document.CreatedAt,
+            pdfUrl = $"/api/v1/automation/documents/{detail.Document.Id}/pdf",
+        };
+    }
+
+    internal static IResult ErrorContent(string code, string message, IReadOnlyList<DocumentFieldError>? fields, int statusCode)
+    {
+        // The error body is serialized once here so replayed and fresh
+        // responses carry identical bytes.
+        return Results.Content(SerializeError(code, message, fields), "application/json", Encoding.UTF8, statusCode);
+    }
+
+    internal static string SerializeError(string code, string message, IReadOnlyList<DocumentFieldError>? fields)
+    {
+        return JsonSerializer.Serialize(
+            new AutomationError(new AutomationErrorDetail(code, message, fields)),
+            _jsonOptions);
+    }
+
+    internal static Guid OwnerId(HttpContext http)
+    {
+        return Guid.Parse(http.User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? throw new InvalidOperationException("Authenticated principal lacks a name identifier."));
+    }
+
+    internal static Guid TokenId(HttpContext http)
+    {
+        return Guid.Parse(http.User.FindFirstValue("token_id")
+            ?? throw new InvalidOperationException("Authenticated principal lacks a token id."));
+    }
+}
+
+public sealed record AutomationFinalizeRequest(
+    Guid TemplateId,
+    Dictionary<string, string>? Values,
+    List<string>? SelectedClauseIds);

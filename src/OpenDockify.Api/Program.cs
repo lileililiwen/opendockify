@@ -11,7 +11,10 @@ using OpenDockify.Data;
 using OpenDockify.Esign;
 using OpenDockify.Finance;
 using OpenDockify.Generation;
+using OpenDockify.Integrations;
 using OpenDockify.Interviews;
+using OpenDockify.Operations;
+using OpenDockify.Operations.Services;
 using OpenDockify.Rendering;
 using OpenDockify.Sharing;
 using OpenDockify.SystemConfig;
@@ -40,6 +43,8 @@ builder.Services.AddRenderingModule();
 builder.Services.AddGenerationModule();
 builder.Services.AddSharingModule();
 builder.Services.AddInterviewsModule();
+builder.Services.AddOperationsModule(builder.Configuration);
+builder.Services.AddIntegrationsModule(builder.Configuration);
 builder.Services.AddAiAssistModule();
 builder.Services.AddEsignModule();
 
@@ -110,6 +115,18 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0,
                 AutoReplenishment = true,
             }));
+    // Automation API: bounded per token (falls back to client IP pre-auth).
+    options.AddPolicy(AutomationEndpoints.RateLimitPolicy, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            httpContext.User.FindFirst("token_id")?.Value
+            ?? httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 60,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true,
+            }));
 });
 
 var app = builder.Build();
@@ -118,6 +135,20 @@ var app = builder.Build();
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
 
 app.UseRateLimiter();
+app.Use(async (context, next) =>
+{
+    var maintenance = context.RequestServices.GetRequiredService<MaintenanceMode>();
+    if (maintenance.IsEnabled
+        && !context.Request.Path.StartsWithSegments("/healthz")
+        && !context.Request.Path.StartsWithSegments("/api/admin/operations"))
+    {
+        context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+        context.Response.Headers.RetryAfter = "60";
+        await context.Response.WriteAsJsonAsync(new { error = "Maintenance in progress." });
+        return;
+    }
+    await next();
+});
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -131,6 +162,9 @@ app.MapSharingEndpoints();
 app.MapInterviewEndpoints();
 app.MapAiAssistEndpoints();
 app.MapAdminAiUsageEndpoints();
+app.MapOperationsEndpoints();
+app.MapAutomationEndpoints();
+app.MapIntegrationManagementEndpoints();
 
 // Self-hosters should not need to run `dotnet ef` manually: apply migrations
 // and run idempotent seeders at startup.

@@ -29,11 +29,28 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     public DbSet<OpenDockify.Sharing.Models.ShareAuditEvent> ShareAuditEvents => Set<OpenDockify.Sharing.Models.ShareAuditEvent>();
 
+    public DbSet<OpenDockify.Operations.Models.BackupOperation> BackupOperations => Set<OpenDockify.Operations.Models.BackupOperation>();
+
     public DbSet<OpenDockify.AiAssist.Models.AiUsageLog> AiUsageLogs => Set<OpenDockify.AiAssist.Models.AiUsageLog>();
 
     public DbSet<OpenDockify.Esign.Models.Signer> Signers => Set<OpenDockify.Esign.Models.Signer>();
 
     public DbSet<OpenDockify.Esign.Models.SigningAuditLog> SigningAuditLogs => Set<OpenDockify.Esign.Models.SigningAuditLog>();
+
+    public DbSet<OpenDockify.Integrations.Models.ServiceToken> ServiceTokens => Set<OpenDockify.Integrations.Models.ServiceToken>();
+
+    public DbSet<OpenDockify.Integrations.Models.IdempotencyRecord> IdempotencyRecords => Set<OpenDockify.Integrations.Models.IdempotencyRecord>();
+
+    public DbSet<OpenDockify.Integrations.Models.WebhookSubscription> WebhookSubscriptions => Set<OpenDockify.Integrations.Models.WebhookSubscription>();
+
+    public DbSet<OpenDockify.Integrations.Models.OutboxEvent> OutboxEvents => Set<OpenDockify.Integrations.Models.OutboxEvent>();
+
+    public DbSet<OpenDockify.Integrations.Models.WebhookDelivery> WebhookDeliveries => Set<OpenDockify.Integrations.Models.WebhookDelivery>();
+
+
+
+
+
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -49,10 +66,14 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(OpenDockify.Interviews.Models.InterviewSession).Assembly);
         // Added by document-sharing-access-control.
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(OpenDockify.Sharing.Models.DocumentGrant).Assembly);
+        // Added by backup-restore-integrity.
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(OpenDockify.Operations.Models.BackupOperation).Assembly);
         // Added by ai-assist.
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(OpenDockify.AiAssist.Models.AiUsageLog).Assembly);
         // Added by esign-extensions.
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(OpenDockify.Esign.Models.Signer).Assembly);
+        // Added by automation-api-webhooks.
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(OpenDockify.Integrations.Models.ServiceToken).Assembly);
         base.OnModelCreating(modelBuilder);
     }
 }
