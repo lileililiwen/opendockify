@@ -44,6 +44,9 @@ public sealed class Document
 
     public string PdfPath { get; set; } = string.Empty;
 
+    /// <summary>SHA-256 of the finalized PDF, used by read-only archive verification.</summary>
+    public string? ContentSha256 { get; set; }
+
     public Guid? ParentId { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

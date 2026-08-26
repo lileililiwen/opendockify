@@ -12,6 +12,8 @@ using OpenDockify.Esign;
 using OpenDockify.Finance;
 using OpenDockify.Generation;
 using OpenDockify.Interviews;
+using OpenDockify.Operations;
+using OpenDockify.Operations.Services;
 using OpenDockify.Rendering;
 using OpenDockify.Sharing;
 using OpenDockify.SystemConfig;
@@ -40,6 +42,7 @@ builder.Services.AddRenderingModule();
 builder.Services.AddGenerationModule();
 builder.Services.AddSharingModule();
 builder.Services.AddInterviewsModule();
+builder.Services.AddOperationsModule(builder.Configuration);
 builder.Services.AddAiAssistModule();
 builder.Services.AddEsignModule();
 
@@ -118,6 +121,20 @@ var app = builder.Build();
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
 
 app.UseRateLimiter();
+app.Use(async (context, next) =>
+{
+    var maintenance = context.RequestServices.GetRequiredService<MaintenanceMode>();
+    if (maintenance.IsEnabled
+        && !context.Request.Path.StartsWithSegments("/healthz")
+        && !context.Request.Path.StartsWithSegments("/api/admin/operations"))
+    {
+        context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+        context.Response.Headers.RetryAfter = "60";
+        await context.Response.WriteAsJsonAsync(new { error = "Maintenance in progress." });
+        return;
+    }
+    await next();
+});
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -131,6 +148,7 @@ app.MapSharingEndpoints();
 app.MapInterviewEndpoints();
 app.MapAiAssistEndpoints();
 app.MapAdminAiUsageEndpoints();
+app.MapOperationsEndpoints();
 
 // Self-hosters should not need to run `dotnet ef` manually: apply migrations
 // and run idempotent seeders at startup.

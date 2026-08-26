@@ -33,6 +33,7 @@ public sealed class ModuleArchitectureTests
         "OpenDockify.AiAssist",
         "OpenDockify.Esign",
         "OpenDockify.SystemConfig",
+        "OpenDockify.Operations",
         "OpenDockify.Data",
         "OpenDockify.Api",
     };
@@ -56,6 +57,7 @@ public sealed class ModuleArchitectureTests
             ["OpenDockify.AiAssist"] = new[] { "OpenDockify.SystemConfig", "OpenDockify.Templates" },
             ["OpenDockify.Esign"] = Array.Empty<string>(),
             ["OpenDockify.SystemConfig"] = Array.Empty<string>(),
+            ["OpenDockify.Operations"] = new[] { "OpenDockify.Generation" },
         };
 
     private static readonly Architecture _architecture = new ArchLoader()

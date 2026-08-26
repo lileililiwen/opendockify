@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\OpenDockify.Operations\OpenDockify.Operations.csproj" />
     <ProjectReference Include="..\OpenDockify.Auth\OpenDockify.Auth.csproj" />
     <ProjectReference Include="..\OpenDockify.Templates\OpenDockify.Templates.csproj" />
     <ProjectReference Include="..\OpenDockify.Generation\OpenDockify.Generation.csproj" />

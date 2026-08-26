@@ -173,6 +173,10 @@ public sealed class DocumentService(
         try
         {
             await pdfRenderer.RenderAsync(fullText, document.PdfPath, cancellationToken);
+            await using var pdf = File.OpenRead(document.PdfPath);
+            document.ContentSha256 = Convert.ToHexString(
+                await System.Security.Cryptography.SHA256.HashDataAsync(pdf, cancellationToken))
+                .ToLowerInvariant();
         }
         catch (Exception ex)
         {

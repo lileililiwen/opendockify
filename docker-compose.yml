@@ -19,6 +19,9 @@ services:
       Seed__AdminUsername: "${OPENDOCKIFY_ADMIN_USERNAME:-admin}"
       Seed__AdminPassword: "${OPENDOCKIFY_ADMIN_PASSWORD:?Set OPENDOCKIFY_ADMIN_PASSWORD in .env}"
       Auth__AllowRegistration: "${OPENDOCKIFY_ALLOW_REGISTRATION:-false}"
+      Backup__Directory: /app/data/backups
+      Backup__ScheduleHours: "${OPENDOCKIFY_BACKUP_SCHEDULE_HOURS:-0}"
+      Backup__SchedulePassphraseFile: "${OPENDOCKIFY_BACKUP_PASSPHRASE_FILE:-}"
     restart: unless-stopped
 
 volumes:

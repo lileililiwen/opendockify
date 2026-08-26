@@ -52,6 +52,9 @@ shown in the application UI.
 - **E-signature seam** — not implemented in the MVP; the schema reserves
   signing status, signers, and an audit log. For legally reliable signing the
   deployer must integrate an external CA and timestamping service.
+- **Verified recovery** — encrypted, checksummed application backups, dry-run
+  validation, read-only archive integrity checks, conservative retention, and
+  controlled SQLite restore. See [backup and restore](docs/backup-restore.md).
 
 ## Technology stack
 
