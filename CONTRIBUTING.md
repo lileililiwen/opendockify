@@ -107,12 +107,16 @@ When the audit flags a vulnerability, follow this order:
 
 ## Local Git hooks
 
-Husky.Net installs two local hooks automatically on the first `dotnet restore` (no manual setup):
+Husky.Net hooks are opt-in because normal restores must remain offline-safe and
+must not trigger tool downloads. Install them explicitly with `HUSKY=1 dotnet
+restore`:
 
 - **pre-commit** — runs `dotnet format --verify-no-changes` on the staged C#/Razor files; the commit is blocked on formatting drift.
 - **pre-push** — runs `dotnet build OpenDockify.sln --no-restore /warnaserror`; the push is blocked on build/analyzer errors.
 
-Hooks are a **fast local pre-check** only — CI is the authoritative gate. They can be skipped for a single command with `--no-verify` (e.g. `git commit --no-verify`) or disabled entirely with `HUSKY=0`.
+Hooks are a **fast local pre-check** only — CI is the authoritative gate. They
+can be skipped for a single command with `--no-verify` (e.g. `git commit
+--no-verify`).
 
 ## Handling format / analyzer failures
 

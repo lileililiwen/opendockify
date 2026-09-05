@@ -25,10 +25,10 @@
     <PackageReference Include="SonarAnalyzer.CSharp" Version="10.32.0.713" PrivateAssets="all" />
   </ItemGroup>
 
-  <!-- Installs Husky.Net local git hooks on restore (git-hooks change). Runs once
-       per solution via the stamp file; hooks are a fast local pre-check, CI remains
-       the authoritative gate. HUSKY=0 disables. -->
-  <Target Name="Husky" AfterTargets="Restore" Condition="'$(HUSKY)' != 0"
+  <!-- Installs Husky.Net local git hooks only when explicitly requested. Keeping
+       tool installation out of normal restore avoids network/file-lock stalls;
+       hooks are a fast local pre-check and CI remains authoritative. -->
+  <Target Name="Husky" AfterTargets="Restore" Condition="'$(HUSKY)' == '1'"
           Inputs="$(MSBuildThisFileDirectory).config/dotnet-tools.json"
           Outputs="$(MSBuildThisFileDirectory).husky/_/install.stamp">
     <Exec Command="dotnet tool restore" StandardOutputImportance="Low" StandardErrorImportance="High" WorkingDirectory="$(MSBuildThisFileDirectory)" />

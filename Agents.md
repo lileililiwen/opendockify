@@ -288,7 +288,7 @@ build verification deferred (optional deployment path, not a build dependency).
 | 3 | `architecture-enforcement` | architecture-enforcement | ArchUnitNET tests enforcing the modular-monolith boundary rules |
 | 4 | `coverage-gates` | coverage-gates | xUnit test project, Coverlet OpenCover collector, incremental 80% new-code gate script |
 | 5 | `nuget-audit` | nuget-audit | Restore-time + CI NuGet vulnerability scanning, explicit accept policy |
-| 6 | `git-hooks` | git-hooks | Husky.Net local pre-commit (format) + pre-push (build) hooks, auto-install |
+| 6 | `git-hooks` | git-hooks | Husky.Net local pre-commit (format) + pre-push (build) hooks, opt-in install with `HUSKY=1` |
 | 7 | `ci-pipeline` | ci-pipeline | CI on push/PR: restore, audit, format, build 0/0, tests, incremental coverage |
 | 8 | `ai-code-conventions` | ai-code-conventions | AI-involvement PR markers, AI review checklist, non-blocking large-diff warning |
 | 9 | `branch-protection` | branch-protection | Protected `main` policy + CONTRIBUTING + PR template |
