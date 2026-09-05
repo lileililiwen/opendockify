@@ -35,12 +35,19 @@ If you cannot edit repository settings yourself, ask a maintainer and point at t
 
 ## How CI verifies your change
 
-The `CI` workflow runs on every push to `main` and every pull request:
+The `CI` and `Release gates` workflows run on every push to `main` and every
+pull request:
 
 1. `dotnet restore`
 2. `dotnet format OpenDockify.sln --verify-no-changes` — fails on any formatting drift from `.editorconfig`
 3. `dotnet build OpenDockify.sln -c Release /warnaserror` — fails on any compiler or analyzer warning
 4. `dotnet test OpenDockify.sln -c Release --no-build` — fails on any failing test
+
+`Release gates` additionally validates active OpenSpec changes, builds Flutter
+web/Linux targets, and starts the Docker image against SQLite to verify
+`/healthz`. The local equivalents are `openspec validate --changes
+--strict --no-interactive`, `flutter analyze`, `flutter test`, and
+`flutter build web --release` / `flutter build linux --release`.
 
 The workflow **must pass before merge** (required status check).
 

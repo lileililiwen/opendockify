@@ -1,0 +1,66 @@
+name: Release gates
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  openspec:
+    name: openspec
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install OpenSpec
+        run: npm install --global @fission-ai/openspec
+      - name: Validate changes
+        run: openspec validate --changes --strict --no-interactive
+
+  flutter-builds:
+    name: flutter-${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [web, linux, apk]
+    defaults:
+      run:
+        working-directory: opendockify-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter build ${{ matrix.target }} --release
+
+  container-smoke:
+    name: container-smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build --tag opendockify:${{ github.sha }} .
+      - name: Start SQLite container
+        run: |
+          docker run --detach --name opendockify-smoke \
+            --env OPENDOCKIFY_JWT_SECRET=ci-only-secret-at-least-32-bytes \
+            --env OPENDOCKIFY_ADMIN_PASSWORD=ci-only-admin-password \
+            --publish 18080:8080 opendockify:${{ github.sha }}
+          for attempt in $(seq 1 30); do
+            curl --fail --silent http://127.0.0.1:18080/healthz && exit 0
+            sleep 2
+          done
+          docker logs opendockify-smoke
+          exit 1
+      - name: Container logs on failure
+        if: failure()
+        run: docker logs opendockify-smoke || true
+      - name: Cleanup
+        if: always()
+        run: docker rm --force opendockify-smoke || true
