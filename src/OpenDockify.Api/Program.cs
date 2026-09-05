@@ -143,6 +143,7 @@ var app = builder.Build();
 // Health endpoint used by the Docker healthcheck.
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
 
+app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseRateLimiter();
 app.Use(async (context, next) =>
 {

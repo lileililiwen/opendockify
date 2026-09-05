@@ -37,6 +37,8 @@ class _DocumentFillScreenState extends ConsumerState<DocumentFillScreen> {
   String? _draftKey;
   bool _hasSavedDraft = false;
   bool _draftSaved = false;
+  bool _draftSaveFailed = false;
+  int _draftRevision = 0;
 
   Template? _template;
   TemplateDefinition? _definition;
@@ -103,8 +105,10 @@ class _DocumentFillScreenState extends ConsumerState<DocumentFillScreen> {
       if (draft == null) return;
       _initialValues = draft.values;
       _initialClauses = draft.selectedClauseIds.toSet();
+      _draftRevision = draft.revision;
       _hasSavedDraft = true;
       _draftSaved = true;
+      _draftSaveFailed = false;
     } catch (_) {
       // Secure-storage failures must not block drafting.
     }
@@ -139,9 +143,15 @@ class _DocumentFillScreenState extends ConsumerState<DocumentFillScreen> {
       values: snapshot.values,
       selectedClauseIds: snapshot.selectedClauseIds,
       updatedAt: DateTime.now().toUtc(),
+      revision: ++_draftRevision,
     );
     _draftDebounce?.cancel();
-    if (mounted) setState(() => _draftSaved = false);
+    if (mounted) {
+      setState(() {
+        _draftSaved = false;
+        _draftSaveFailed = false;
+      });
+    }
     _draftDebounce = Timer(
       const Duration(milliseconds: 400),
       () => unawaited(_flushDraft()),
@@ -154,10 +164,23 @@ class _DocumentFillScreenState extends ConsumerState<DocumentFillScreen> {
     if (key == null || draft == null) return;
     try {
       await ref.read(draftStoreProvider).write(key, draft);
-      _hasSavedDraft = true;
-      if (mounted) setState(() => _draftSaved = true);
+      if (identical(_pendingDraft, draft)) {
+        _pendingDraft = null;
+        _hasSavedDraft = true;
+        if (mounted) {
+          setState(() {
+            _draftSaved = true;
+            _draftSaveFailed = false;
+          });
+        }
+      }
     } catch (_) {
-      if (mounted) setState(() => _draftSaved = false);
+      if (identical(_pendingDraft, draft) && mounted) {
+        setState(() {
+          _draftSaved = false;
+          _draftSaveFailed = true;
+        });
+      }
     }
   }
 
@@ -171,6 +194,7 @@ class _DocumentFillScreenState extends ConsumerState<DocumentFillScreen> {
     setState(() {
       _hasSavedDraft = false;
       _draftSaved = false;
+      _draftSaveFailed = false;
     });
     ScaffoldMessenger.of(context)
         .showSnackBar(const SnackBar(content: Text('Saved draft discarded.')));
@@ -312,7 +336,9 @@ class _DocumentFillScreenState extends ConsumerState<DocumentFillScreen> {
         if (_draftKey != null) ...[
           const SizedBox(height: 4),
           Text(
-            _draftSaved
+            _draftSaveFailed
+                ? 'Draft could not be saved; keep this screen open and retry.'
+                : _draftSaved
                 ? 'Draft saved securely on this device'
                 : 'Saving draft…',
             style: Theme.of(context).textTheme.bodySmall,

@@ -56,9 +56,11 @@ public sealed partial class WebhookDeliveryService(
     WebhookRoutePlanner routePlanner,
     IWebhookSender sender,
     IOptions<IntegrationsOptions> options,
-    ILogger<WebhookDeliveryService>? logger = null)
+    ILogger<WebhookDeliveryService>? logger = null,
+    IClock? clock = null)
 {
     private readonly ILogger<WebhookDeliveryService> _logger = logger ?? NullLogger<WebhookDeliveryService>.Instance;
+    private readonly IClock _clock = clock ?? SystemClock.Instance;
 
     private static readonly System.Text.Json.JsonSerializerOptions _jsonOptions =
         new(System.Text.Json.JsonSerializerDefaults.Web);
@@ -76,7 +78,7 @@ public sealed partial class WebhookDeliveryService(
         }
 
         var created = 0;
-        var now = DateTime.UtcNow;
+        var now = _clock.UtcNow;
         foreach (var @event in pending)
         {
             var subscriptions = await db.Set<WebhookSubscription>()
@@ -112,7 +114,7 @@ public sealed partial class WebhookDeliveryService(
         CancellationToken cancellationToken = default)
     {
         var workerId = Guid.NewGuid();
-        var now = DateTime.UtcNow;
+        var now = _clock.UtcNow;
         var leaseExpires = now.AddMinutes(options.Value.Webhooks.GetLeaseMinutes());
 
         await db.Set<WebhookDelivery>()
@@ -135,6 +137,11 @@ public sealed partial class WebhookDeliveryService(
     /// <summary>Executes one delivery attempt: plan → sign → send → record.</summary>
     public async Task DeliverAsync(WebhookDelivery delivery, CancellationToken cancellationToken = default)
     {
+        using var transitionScope = _logger.BeginScope(new Dictionary<string, object>
+        {
+            ["CorrelationId"] = Guid.NewGuid().ToString("N"),
+            ["DeliveryId"] = delivery.Id,
+        });
         var subscription = await db.Set<WebhookSubscription>()
             .FindAsync([delivery.SubscriptionId], cancellationToken);
         var @event = await db.Set<OutboxEvent>()
@@ -145,7 +152,7 @@ public sealed partial class WebhookDeliveryService(
             delivery.State = WebhookDeliveryState.Exhausted;
             delivery.LastError = "subscription or event no longer available";
             delivery.NextAttemptAtUtc = null;
-            delivery.UpdatedAtUtc = DateTime.UtcNow;
+            delivery.UpdatedAtUtc = _clock.UtcNow;
             await db.SaveChangesAsync(cancellationToken);
             return;
         }
@@ -158,17 +165,17 @@ public sealed partial class WebhookDeliveryService(
                 // Unresolvable destinations are usually temporary: keep the
                 // delivery inside the normal retry budget instead of blocking.
                 delivery.AttemptCount++;
-                AppendAttempt(delivery, DateTime.UtcNow, null, plan.BlockedReason);
+                AppendAttempt(delivery, _clock.UtcNow, null, plan.BlockedReason);
                 delivery.State = delivery.AttemptCount >= options.Value.Webhooks.GetMaxAttempts()
                     ? WebhookDeliveryState.Exhausted
                     : WebhookDeliveryState.Pending;
                 delivery.LastError = plan.BlockedReason;
                 delivery.NextAttemptAtUtc = delivery.State == WebhookDeliveryState.Pending
-                    ? DateTime.UtcNow.Add(ComputeBackoff(delivery.AttemptCount, options.Value.Webhooks.GetBaseRetryDelaySeconds()))
+                    ? _clock.UtcNow.Add(ComputeBackoff(delivery.AttemptCount, options.Value.Webhooks.GetBaseRetryDelaySeconds()))
                     : null;
                 delivery.LeaseOwner = null;
                 delivery.LeaseExpiresAtUtc = null;
-                delivery.UpdatedAtUtc = DateTime.UtcNow;
+                delivery.UpdatedAtUtc = _clock.UtcNow;
                 await db.SaveChangesAsync(cancellationToken);
                 return;
             }
@@ -178,8 +185,8 @@ public sealed partial class WebhookDeliveryService(
             delivery.BlockedReason = plan.BlockedReason;
             delivery.LastError = null;
             delivery.NextAttemptAtUtc = null;
-            AppendAttempt(delivery, DateTime.UtcNow, null, $"blocked:{plan.BlockedReason}");
-            delivery.UpdatedAtUtc = DateTime.UtcNow;
+            AppendAttempt(delivery, _clock.UtcNow, null, $"blocked:{plan.BlockedReason}");
+            delivery.UpdatedAtUtc = _clock.UtcNow;
             await db.SaveChangesAsync(cancellationToken);
             return;
         }
@@ -207,12 +214,12 @@ public sealed partial class WebhookDeliveryService(
         delivery.AttemptCount++;
         delivery.LastStatusCode = outcome.StatusCode;
         delivery.LastError = outcome.Error;
-        delivery.UpdatedAtUtc = DateTime.UtcNow;
+        delivery.UpdatedAtUtc = _clock.UtcNow;
 
         if (outcome.Success)
         {
             delivery.State = WebhookDeliveryState.Delivered;
-            delivery.DeliveredAtUtc = DateTime.UtcNow;
+            delivery.DeliveredAtUtc = _clock.UtcNow;
             delivery.NextAttemptAtUtc = null;
         }
         else if (delivery.AttemptCount >= options.Value.Webhooks.GetMaxAttempts())
@@ -224,14 +231,14 @@ public sealed partial class WebhookDeliveryService(
         {
             delivery.State = WebhookDeliveryState.Pending;
             delivery.NextAttemptAtUtc =
-                DateTime.UtcNow.Add(ComputeBackoff(delivery.AttemptCount, options.Value.Webhooks.GetBaseRetryDelaySeconds()));
+                _clock.UtcNow.Add(ComputeBackoff(delivery.AttemptCount, options.Value.Webhooks.GetBaseRetryDelaySeconds()));
         }
 
-        AppendAttempt(delivery, DateTime.UtcNow, outcome.StatusCode, outcome.Error);
+        AppendAttempt(delivery, _clock.UtcNow, outcome.StatusCode, outcome.Error);
         delivery.LeaseOwner = null;
         delivery.LeaseExpiresAtUtc = null;
         await db.SaveChangesAsync(cancellationToken);
-        Log.Attempted(_logger, delivery.Id, delivery.State, outcome.StatusCode);
+        Log.Attempted(_logger, delivery.Id, delivery.State, outcome.StatusCode, "delivery-completed");
     }
 
     private static void AppendAttempt(WebhookDelivery delivery, DateTime atUtc, int? statusCode, string? error)
@@ -265,13 +272,28 @@ public sealed partial class WebhookDeliveryService(
             return false;
         }
 
-        delivery.State = WebhookDeliveryState.Pending;
-        delivery.AttemptCount = 0;
-        delivery.NextAttemptAtUtc = DateTime.UtcNow;
-        delivery.BlockedReason = null;
-        delivery.UpdatedAtUtc = DateTime.UtcNow;
-        await db.SaveChangesAsync(cancellationToken);
-        return true;
+        var now = _clock.UtcNow;
+        var updated = await db.Set<WebhookDelivery>()
+            .Where(x => x.Id == deliveryId
+                        && x.OwnerId == ownerId
+                        && x.State != WebhookDeliveryState.Delivering)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.State, WebhookDeliveryState.Pending)
+                .SetProperty(x => x.AttemptCount, 0)
+                .SetProperty(x => x.NextAttemptAtUtc, now)
+                .SetProperty(x => x.BlockedReason, (string?)null)
+                .SetProperty(x => x.UpdatedAtUtc, now), cancellationToken);
+        if (updated == 1)
+        {
+            delivery.State = WebhookDeliveryState.Pending;
+            delivery.AttemptCount = 0;
+            delivery.NextAttemptAtUtc = now;
+            delivery.BlockedReason = null;
+            delivery.UpdatedAtUtc = now;
+            Log.RetryRequested(_logger, deliveryId);
+        }
+
+        return updated == 1;
     }
 
     /// <summary>
@@ -385,8 +407,11 @@ public sealed partial class WebhookDeliveryService(
 
     private static partial class Log
     {
-        [LoggerMessage(1, LogLevel.Information, "Webhook delivery {DeliveryId} attempted -> {State} ({StatusCode}).")]
+        [LoggerMessage(1, LogLevel.Information, "Webhook delivery {DeliveryId} attempted -> {State} ({StatusCode}); reason={Reason}.")]
         public static partial void Attempted(
-            ILogger logger, Guid deliveryId, WebhookDeliveryState state, int? statusCode);
+            ILogger logger, Guid deliveryId, WebhookDeliveryState state, int? statusCode, string reason);
+
+        [LoggerMessage(2, LogLevel.Information, "Webhook delivery {DeliveryId} manually reset for retry.")]
+        public static partial void RetryRequested(ILogger logger, Guid deliveryId);
     }
 }
