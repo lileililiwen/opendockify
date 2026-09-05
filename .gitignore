@@ -26,6 +26,7 @@ logs/
 
 ## Test coverage output
 TestResults/
+__pycache__/
 
 ## Runtime data (SQLite default DB + generated PDF documents)
 opendockify.db

@@ -196,6 +196,19 @@ dotnet ef database update --project src/OpenDockify.Data --startup-project src/O
 
 ## 5. Agent Workflow Checklist
 
+### 5.1 Existing branch or dirty worktree recovery
+
+Before changing files, run `git status --short --branch` and
+`git branch --all --verbose`. If the checkout is not on `main` and the
+worktree is clean, inspect the branch commits with
+`git log main..<branch> --oneline`, switch to `main`, and integrate only the
+intended commits with a fast-forward or documented merge. Do not create a new
+branch. If the worktree is dirty, do not switch or discard changes: record the
+paths, ask the owner whether they belong to the requested change, and preserve
+them until resolved. After integration, run the applicable gates, then delete
+only the obsolete local branch with `git branch -d <branch>`; never delete the
+remote branch or force-push as part of routine recovery.
+
 When asked to implement a feature or spec:
 
 1. **Read** the change folder: `proposal.md`, `specs/<cap>/spec.md`,
