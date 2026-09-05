@@ -8,13 +8,17 @@ String friendlyErrorMessage(ApiError error) {
     case ApiErrorKind.unauthorized:
       return error.message;
     case ApiErrorKind.forbidden:
-      return error.message.isEmpty ? 'You are not allowed to do that.' : error.message;
+      return error.message.isEmpty
+          ? 'You are not allowed to do that.'
+          : error.message;
     case ApiErrorKind.notFound:
       return error.message.isEmpty ? 'Not found.' : error.message;
     case ApiErrorKind.validation:
       return error.message.isEmpty ? 'Please check your input.' : error.message;
     case ApiErrorKind.rateLimited:
-      return error.message.isEmpty ? 'Rate limit reached. Try again later.' : error.message;
+      return error.message.isEmpty
+          ? 'Rate limit reached. Try again later.'
+          : error.message;
     case ApiErrorKind.aiDisabled:
       return 'AI is disabled by the administrator.';
     case ApiErrorKind.server:
@@ -22,4 +26,12 @@ String friendlyErrorMessage(ApiError error) {
     case ApiErrorKind.unknown:
       return 'Something went wrong. Please try again.';
   }
+}
+
+/// Converts any failure into stable copy suitable for a user-facing state.
+String safeErrorMessage(Object error) {
+  if (error case final ApiError apiError) {
+    return friendlyErrorMessage(apiError);
+  }
+  return 'Something went wrong. Please try again.';
 }

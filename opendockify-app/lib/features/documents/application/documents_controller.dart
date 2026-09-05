@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/models/document.dart';
 import '../../../core/providers.dart';
+import '../../../core/errors/error_presenter.dart';
 
 /// Paginated document list for the current user.
 class DocumentsController extends AsyncNotifier<DocumentListPage> {
@@ -118,7 +119,7 @@ class DocumentDetailController extends AsyncNotifier<DocumentView> {
       ref.invalidate(documentVersionsProvider(documentId));
       return null;
     } catch (error) {
-      return error.toString();
+      return safeErrorMessage(error);
     }
   }
 }

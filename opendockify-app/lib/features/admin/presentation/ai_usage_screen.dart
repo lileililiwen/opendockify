@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/widgets/common.dart';
+import '../../../core/errors/error_presenter.dart';
 import '../application/admin_controllers.dart';
 
 /// Administrator view of recent AI usage entries.
@@ -17,15 +18,20 @@ class AiUsageScreen extends ConsumerWidget {
       body: usage.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => ErrorView(
-          message: error.toString(),
+          message: safeErrorMessage(error),
           onRetry: () => ref.read(aiUsageControllerProvider.notifier).refresh(),
         ),
         data: (entries) {
           if (entries.isEmpty) {
-            return const Center(child: Text('No AI usage recorded.'));
+            return const EmptyState(
+              title: 'No AI usage recorded',
+              message: 'Usage will appear here after AI requests are made.',
+              icon: Icons.auto_awesome_outlined,
+            );
           }
           return RefreshIndicator(
-            onRefresh: () => ref.read(aiUsageControllerProvider.notifier).refresh(),
+            onRefresh: () =>
+                ref.read(aiUsageControllerProvider.notifier).refresh(),
             child: ListView.builder(
               itemCount: entries.length,
               itemBuilder: (context, index) {
@@ -33,15 +39,25 @@ class AiUsageScreen extends ConsumerWidget {
                 final time = entry.timestamp == null
                     ? '—'
                     : '${entry.timestamp!.year}-${entry.timestamp!.month.toString().padLeft(2, '0')}-${entry.timestamp!.day.toString().padLeft(2, '0')} '
-                        '${entry.timestamp!.hour.toString().padLeft(2, '0')}:${entry.timestamp!.minute.toString().padLeft(2, '0')}';
+                          '${entry.timestamp!.hour.toString().padLeft(2, '0')}:${entry.timestamp!.minute.toString().padLeft(2, '0')}';
                 return ExpansionTile(
                   title: Text(entry.action ?? 'polish'),
-                  subtitle: Text('$time · user ${entry.userId ?? '?'} · ${entry.success ? 'ok' : 'failed'}'),
+                  subtitle: Text(
+                    '$time · user ${entry.userId ?? '?'} · ${entry.success ? 'ok' : 'failed'}',
+                  ),
                   children: [
-                    if (entry.requestSnippet != null && entry.requestSnippet!.isNotEmpty)
-                      ListTile(title: const Text('Request'), subtitle: Text(entry.requestSnippet!)),
-                    if (entry.responseSnippet != null && entry.responseSnippet!.isNotEmpty)
-                      ListTile(title: const Text('Response'), subtitle: Text(entry.responseSnippet!)),
+                    if (entry.requestSnippet != null &&
+                        entry.requestSnippet!.isNotEmpty)
+                      ListTile(
+                        title: const Text('Request'),
+                        subtitle: Text(entry.requestSnippet!),
+                      ),
+                    if (entry.responseSnippet != null &&
+                        entry.responseSnippet!.isNotEmpty)
+                      ListTile(
+                        title: const Text('Response'),
+                        subtitle: Text(entry.responseSnippet!),
+                      ),
                   ],
                 );
               },

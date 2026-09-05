@@ -9,6 +9,7 @@ import '../../../core/providers.dart';
 import '../../../core/models/template.dart';
 import '../../../core/models/template_dto.dart';
 import '../../../core/widgets/common.dart';
+import '../../../core/errors/error_presenter.dart';
 import '../../ai/presentation/polish_clause_button.dart';
 import '../application/marketplace_controller.dart';
 import '../application/template_detail_controller.dart';
@@ -26,7 +27,7 @@ class TemplateDetailScreen extends ConsumerWidget {
       appBar: AppBar(title: const Text('Template')),
       body: detail.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => ErrorView(message: error.toString()),
+        error: (error, _) => ErrorView(message: safeErrorMessage(error)),
         data: (template) => _TemplateDetailBody(template: template),
       ),
     );
@@ -196,8 +197,9 @@ class _TemplateDetailBody extends ConsumerWidget {
       );
     } catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(error.toString())));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(safeErrorMessage(error))),
+        );
       }
     }
   }

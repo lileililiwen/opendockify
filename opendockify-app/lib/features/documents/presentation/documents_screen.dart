@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/widgets/common.dart';
+import '../../../core/errors/error_presenter.dart';
 import '../../../core/models/document.dart';
 import '../../settings/presentation/main_navigation_bar.dart';
 import '../application/documents_controller.dart';
@@ -135,24 +136,19 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
     return documents.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (error, _) => ErrorView(
-        message: error.toString(),
+        message: safeErrorMessage(error),
         onRetry: () => ref.read(documentsControllerProvider.notifier).refresh(),
       ),
       data: (page) {
         if (page.items.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.folder_open_outlined, size: 48),
-                const SizedBox(height: 12),
-                Text(
-                  _searchController.text.isEmpty
-                      ? 'No documents in this view.'
-                      : 'No documents match your search.',
-                ),
-              ],
-            ),
+          return EmptyState(
+            title: _searchController.text.isEmpty
+                ? 'No documents in this view'
+                : 'No documents match your search',
+            message: _searchController.text.isEmpty
+                ? 'Create a document to get started.'
+                : 'Try a different title or template search.',
+            icon: Icons.folder_open_outlined,
           );
         }
         return RefreshIndicator(

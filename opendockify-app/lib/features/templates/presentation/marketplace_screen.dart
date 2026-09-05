@@ -6,6 +6,7 @@ import '../../../core/legal/disclaimer_dialog.dart';
 import '../../../core/models/template_dto.dart';
 import '../../../core/providers.dart';
 import '../../../core/widgets/common.dart';
+import '../../../core/errors/error_presenter.dart';
 import '../../settings/presentation/main_navigation_bar.dart';
 import '../application/marketplace_controller.dart';
 
@@ -46,7 +47,8 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () => ref.read(marketplaceControllerProvider.notifier).refresh(),
+            onPressed: () =>
+                ref.read(marketplaceControllerProvider.notifier).refresh(),
             tooltip: 'Refresh',
           ),
         ],
@@ -54,19 +56,25 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
       body: marketplace.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => ErrorView(
-          message: error.toString(),
-          onRetry: () => ref.read(marketplaceControllerProvider.notifier).refresh(),
+          message: safeErrorMessage(error),
+          onRetry: () =>
+              ref.read(marketplaceControllerProvider.notifier).refresh(),
         ),
         data: (templates) {
           if (templates.isEmpty) {
-            return const Center(child: Text('No templates available.'));
+            return const EmptyState(
+              title: 'No templates available',
+              message: 'Create a template or check back later.',
+              icon: Icons.description_outlined,
+            );
           }
           final categories = <String, List<TemplateSummary>>{};
           for (final t in templates) {
             categories.putIfAbsent(t.category, () => []).add(t);
           }
           return RefreshIndicator(
-            onRefresh: () => ref.read(marketplaceControllerProvider.notifier).refresh(),
+            onRefresh: () =>
+                ref.read(marketplaceControllerProvider.notifier).refresh(),
             child: ListView(
               children: [
                 for (final entry in categories.entries) ...[
@@ -79,9 +87,19 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                   ),
                   for (final t in entry.value)
                     ListTile(
-                      leading: Icon(t.isBuiltIn ? Icons.auto_awesome : Icons.description_outlined),
+                      leading: Icon(
+                        t.isBuiltIn
+                            ? Icons.auto_awesome
+                            : Icons.description_outlined,
+                      ),
                       title: Text(t.name),
-                      subtitle: t.description.isEmpty ? null : Text(t.description, maxLines: 2, overflow: TextOverflow.ellipsis),
+                      subtitle: t.description.isEmpty
+                          ? null
+                          : Text(
+                              t.description,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                       trailing: t.isBuiltIn ? const Text('built-in') : null,
                       onTap: () => context.push('/templates/${t.id}'),
                     ),

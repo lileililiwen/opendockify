@@ -8,6 +8,7 @@ import '../../../core/api/api_error.dart';
 import '../../../core/models/document.dart';
 import '../../../core/providers.dart';
 import '../../../core/widgets/common.dart';
+import '../../../core/errors/error_presenter.dart';
 import '../../ai/presentation/polish_document_button.dart';
 import '../application/documents_controller.dart';
 import '../data/pdf_export_service.dart';
@@ -25,7 +26,7 @@ class DocumentDetailScreen extends ConsumerWidget {
       appBar: AppBar(title: const Text('Document')),
       body: detail.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => ErrorView(message: error.toString()),
+        error: (error, _) => ErrorView(message: safeErrorMessage(error)),
         data: (doc) => _DocumentDetailBody(document: doc),
       ),
     );
@@ -417,7 +418,7 @@ class _DocumentDetailBody extends ConsumerWidget {
             ),
             error: (error, _) => Padding(
               padding: const EdgeInsets.all(16),
-              child: Text(error.toString()),
+              child: Text(safeErrorMessage(error)),
             ),
             data: (items) => Column(
               children: [

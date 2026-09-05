@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/widgets/common.dart';
+import '../../../core/errors/error_presenter.dart';
 import '../application/admin_controllers.dart';
 
 /// Lists allowlisted system settings; secret values are masked. Administrators
@@ -18,24 +19,38 @@ class AdminSettingsScreen extends ConsumerWidget {
       body: settings.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => ErrorView(
-          message: error.toString(),
-          onRetry: () => ref.read(adminSettingsControllerProvider.notifier).refresh(),
+          message: safeErrorMessage(error),
+          onRetry: () =>
+              ref.read(adminSettingsControllerProvider.notifier).refresh(),
         ),
         data: (items) {
           if (items.isEmpty) {
-            return const Center(child: Text('No settings available.'));
+            return const EmptyState(
+              title: 'No settings available',
+              message: 'There are no configurable settings for this server.',
+              icon: Icons.settings_outlined,
+            );
           }
           return RefreshIndicator(
-            onRefresh: () => ref.read(adminSettingsControllerProvider.notifier).refresh(),
+            onRefresh: () =>
+                ref.read(adminSettingsControllerProvider.notifier).refresh(),
             child: ListView.builder(
               itemCount: items.length,
               itemBuilder: (context, index) {
                 final setting = items[index];
                 return ListTile(
                   title: Text(setting.key),
-                  subtitle: Text(setting.masked ? '(masked — replace to change)' : (setting.value ?? '—')),
-                  trailing: Text(setting.source, style: Theme.of(context).textTheme.bodySmall),
-                  onTap: () => _editSetting(context, ref, setting.key, setting.value),
+                  subtitle: Text(
+                    setting.masked
+                        ? '(masked — replace to change)'
+                        : (setting.value ?? '—'),
+                  ),
+                  trailing: Text(
+                    setting.source,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  onTap: () =>
+                      _editSetting(context, ref, setting.key, setting.value),
                 );
               },
             ),
@@ -45,7 +60,12 @@ class AdminSettingsScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _editSetting(BuildContext context, WidgetRef ref, String key, String? currentValue) async {
+  Future<void> _editSetting(
+    BuildContext context,
+    WidgetRef ref,
+    String key,
+    String? currentValue,
+  ) async {
     final controller = TextEditingController(text: currentValue ?? '');
     final messenger = ScaffoldMessenger.of(context);
     final result = await showDialog<String>(
@@ -54,18 +74,28 @@ class AdminSettingsScreen extends ConsumerWidget {
         title: Text(key),
         content: TextField(
           controller: controller,
-          decoration: InputDecoration(labelText: currentValue == null ? 'New value' : 'Value'),
+          decoration: InputDecoration(
+            labelText: currentValue == null ? 'New value' : 'Value',
+          ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.of(context).pop(controller.text), child: const Text('Save')),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(controller.text),
+            child: const Text('Save'),
+          ),
         ],
       ),
     );
     controller.dispose();
     if (result == null) return;
 
-    final error = await ref.read(adminSettingsControllerProvider.notifier).updateSetting(key, result);
+    final error = await ref
+        .read(adminSettingsControllerProvider.notifier)
+        .updateSetting(key, result);
     if (!context.mounted) return;
     if (error != null) {
       messenger.showSnackBar(SnackBar(content: Text(error)));
