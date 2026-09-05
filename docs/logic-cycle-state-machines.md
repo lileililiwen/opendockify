@@ -3,6 +3,9 @@
 This document is the operational contract for asynchronous document and
 integration work.
 
+These invariants are implemented and covered by the archived
+`logic-cycle-observability` change on the current `main` baseline.
+
 ## Drafts
 
 `editing -> saving -> saved` is the normal path. A write failure produces

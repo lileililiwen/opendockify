@@ -180,6 +180,11 @@ authority.
 
 ## Development
 
+The current audit backlog is complete: all OpenSpec changes are archived and
+the repository is maintained directly on `main`. The verified baseline is a
+clean Release build, 165 .NET tests, 85 Flutter tests, and no Flutter analyzer
+issues. Run the complete local gate with `./scripts/quality-check.sh`.
+
 ```bash
 dotnet build OpenDockify.sln          # MUST be 0 warnings / 0 errors
 dotnet run --project src/OpenDockify.Api

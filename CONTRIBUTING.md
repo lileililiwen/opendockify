@@ -11,6 +11,8 @@ run the local gates, and push `main` only after verification.
 - **Do not allow force pushes** unless recovering from a documented repository incident.
 - Keep `main` linear where practical; use fast-forward integration when importing
   an existing local branch, then remove the obsolete local branch.
+- The repository currently has no feature branches locally or remotely; `main`
+  is the only delivery branch.
 
 If you cannot edit repository settings yourself, ask a maintainer and point at this section.
 
@@ -24,7 +26,8 @@ If you cannot edit repository settings yourself, ask a maintainer and point at t
 - Do not create a feature branch for normal work. The active checkout is `main`.
 - Keep one OpenSpec change focused and process changes sequentially.
 - If an old branch is discovered, integrate only its intended commits into
-  `main`, verify, then delete the obsolete local branch.
+  `main`, verify, then delete obsolete local and, when explicitly requested,
+  remote branches.
 
 ## Commits
 
@@ -48,6 +51,10 @@ web/Linux targets, and starts the Docker image against SQLite to verify
 `/healthz`. The local equivalents are `openspec validate --changes
 --strict --no-interactive`, `flutter analyze`, `flutter test`, and
 `flutter build web --release` / `flutter build linux --release`.
+
+Run `./scripts/quality-check.sh` from the repository root for the complete
+local gate: strict OpenSpec validation, restore, format, Release build/tests,
+Flutter analysis, and Flutter tests.
 
 The workflow **must pass before merge** (required status check).
 

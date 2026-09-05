@@ -207,7 +207,8 @@ branch. If the worktree is dirty, do not switch or discard changes: record the
 paths, ask the owner whether they belong to the requested change, and preserve
 them until resolved. After integration, run the applicable gates, then delete
 only the obsolete local branch with `git branch -d <branch>`; never delete the
-remote branch or force-push as part of routine recovery.
+remote branch unless explicitly requested by the owner. Never force-push as
+part of routine recovery.
 
 When asked to implement a feature or spec:
 
@@ -269,18 +270,30 @@ When asked to implement a feature or spec:
 
 ## 7. Current State & Roadmap
 
-### 7.1 Shipped & archived
+### 7.1 Current shipped state
 
-Source of truth in `openspec/specs/`. The platform foundation plus the eight
-quality capabilities are implemented and archived (2026-08-20):
-`platform-foundation`, `editorconfig-and-analyzers`, `architecture-enforcement`,
-`coverage-gates`, `nuget-audit`, `git-hooks`, `ci-pipeline`,
-`ai-code-conventions`, `branch-protection`. Build is 0 warnings/0 errors; unit
-+ architecture tests green; Postgres provider switch smoke-tested; Docker image
-build verification deferred (optional deployment path, not a build dependency).
+All OpenSpec changes are archived; `openspec list` reports no active changes.
+The audit-driven delivery completed directly on `main`:
 
-### 7.2 Pending changes (implement in this order)
+- `main-only-agent-workflow` — direct main development and repository workflow rules.
+- `logic-cycle-observability` — revision-safe drafts, correlation IDs, clock injection, and webhook retry consistency.
+- `ci-cd-release-gates` — strict OpenSpec validation, Flutter web/Linux/APK builds, and Docker SQLite health smoke tests.
+- `quality-testing` — reproducible restore, format, Release build, backend tests, Flutter analysis, and Flutter tests.
+- `ui-ux-accessibility` — safe error copy, shared empty states, semantic labels, and recovery actions.
 
+The NuGet URI was verified as reachable. The restore delay was fixed by making
+Husky installation explicitly opt-in with `HUSKY=1`; ordinary `dotnet restore`
+now remains free of tool-download side effects. The verified baseline is a
+clean Release build, 165 .NET tests, 85 Flutter tests, and a clean Flutter
+analysis run. `main` is the only remaining local and remote branch.
+
+### 7.2 Next work
+
+There are no active implementation specs. New work must begin with a validated
+OpenSpec change and follow implement → verify → archive → commit on `main`.
+
+<!-- Historical roadmap retained in git history; active work is tracked by openspec list. -->
+<!--
 | Order | Change | Capabilities | One-line summary |
 |---|---|---|---|
 | 1 | `platform-foundation` | platform-foundation | Solution scaffold, modular monolith, pluggable EF Core providers (SQLite/Postgres/MySQL/SQL Server), Docker, single-file publish, MIT, README disclaimer |
@@ -299,6 +312,7 @@ build verification deferred (optional deployment path, not a build dependency).
 | 14 | `document-generation` | document-generation, pdf-rendering | Fill → validate → render full text + risk notice → PDF → persist record → download/preview/re-edit/list/delete |
 | 15 | `ai-assist` | ai-assist | Optional LLM polish (config-toggleable), strict prompt constraints, usage logging |
 | 16 | `esign-extensions` | esign-extensions | RESERVED signing status field, signer entities, audit log; interface skeletons only |
+-->
 
 ### 7.3 Deferred roadmap
 

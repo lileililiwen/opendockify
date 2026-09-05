@@ -20,6 +20,10 @@ dotnet run --project src/OpenDockify.Operations.Cli -- integrity
 
 Admin endpoints under `/api/admin/operations` create and validate backups, run the read-only integrity check, backfill at most 500 missing document digests per call, show secret-free status, and perform controlled restore. Validation changes no live state and returns a single-use, 30-minute receipt bound to the bundle SHA-256. Restore requires the exact receipt and digest.
 
+Normal `dotnet restore` does not install Husky or download tools. Husky is an
+explicit developer opt-in (`HUSKY=1 dotnet restore`), so automated restore and
+backup/restore verification paths are not blocked by hook setup.
+
 ## SQLite recovery drill
 
 1. Create a backup, copy it and its separately stored passphrase to a clean host, and record source user/template/document counts.
