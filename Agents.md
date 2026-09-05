@@ -30,8 +30,9 @@ PDF export. A "Loan IOU" module is a key feature.
   signing the deployer must integrate external CA + timestamping services; this
   project only orchestrates the workflow, never issues certificates.
 
-**Status:** spec-first bootstrapping. OpenSpec changes are being authored;
-no implementation yet.
+**Status:** active development on `main`. OpenSpec changes are authored before
+implementation; this is a single-maintainer repository and does not use
+feature branches or pull requests for local delivery.
 
 ---
 
@@ -126,9 +127,9 @@ openspec/changes/<name>/
 
 When two or more changes are pending, implement them one at a time, in the
 order listed in [§7 Roadmap](#7-current-state--roadmap). A change is finished
-only when it is implemented AND archived AND merged to `main` via a reviewed
-pull request. Only then may the next change be started. Never interleave or
-partially complete multiple changes.
+only when it is implemented, verified, archived, and committed directly to
+`main`. Only then may the next change be started. Never interleave or partially
+complete multiple changes.
 
 ### 3.4 "Serious code" standard
 
@@ -216,10 +217,11 @@ When asked to implement a feature or spec:
 8. **Update** `tasks.md` — every box checked.
 9. **Archive** — `openspec archive <name> -y` (folds deltas into
    `openspec/specs/`, moves the change to `openspec/changes/archive/`).
-10. **Commit & land via PR** — commit with a conventional message (short title,
-    blank line, detailed body explaining *why* and *what*), on a **feature
-    branch** named after the change, then open a pull request that passes the
-    required CI checks and one approving review before merging into `main`.
+10. **Commit on `main`** — commit with a conventional message (short title,
+    blank line, detailed body explaining *why* and *what*). Do not create a
+    feature branch, pull request, merge commit, or force-push for routine work.
+    Run the local gates before committing; CI remains authoritative when a
+    remote push is used.
 
 > **Global-view rule:** if you cannot point at the existing module or utility
 > your change depends on, stop and explore before writing code. Confidently

@@ -2,15 +2,15 @@
 
 Thanks for contributing! This guide describes the workflow every change goes through — including documentation-only and spec-only changes.
 
-## Branch protection on `main`
+## Main-only maintenance
 
-`main` is the integration branch and is **protected**. Apply these settings in the repository host (GitHub / CodeBuddy / GitLab, per your hosting):
+This is a single-maintainer repository. Work directly on `main`; do not create
+feature branches or pull requests for routine changes. Keep commits focused,
+run the local gates, and push `main` only after verification.
 
-- **Require a pull request before merging** — no direct pushes to `main`.
-- **Require 1 approving review.**
-- **Require status checks to pass before merging**, at minimum the `build` job of the `CI` workflow (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml)). Sonar and package-audit checks join the required list as their gates land.
-- **Do not allow force pushes.**
-- **Squash merge preferred** to keep history linear; merge commits are also acceptable as a documented choice.
+- **Do not allow force pushes** unless recovering from a documented repository incident.
+- Keep `main` linear where practical; use fast-forward integration when importing
+  an existing local branch, then remove the obsolete local branch.
 
 If you cannot edit repository settings yourself, ask a maintainer and point at this section.
 
@@ -19,11 +19,12 @@ If you cannot edit repository settings yourself, ask a maintainer and point at t
 - Read [`Agents.md`](Agents.md) — it is the normative contract for how changes are specified, implemented, and verified in this repository.
 - The project follows **spec-first development**: every change starts as an OpenSpec change in `openspec/changes/` and is implemented, verified, archived, and committed one change at a time.
 
-## Branches
+## Branch policy
 
-- Create a **feature branch** for every change: `git checkout -b <change-name>` (e.g. `feat/course-tags`, or the OpenSpec change name).
-- Keep the branch focused on one change. Do not stack unrelated work on a branch.
-- Do not commit directly to `main` — the host rejects it.
+- Do not create a feature branch for normal work. The active checkout is `main`.
+- Keep one OpenSpec change focused and process changes sequentially.
+- If an old branch is discovered, integrate only its intended commits into
+  `main`, verify, then delete the obsolete local branch.
 
 ## Commits
 
@@ -119,12 +120,15 @@ Hooks are a **fast local pre-check** only — CI is the authoritative gate. They
 - **Analyzer warning (now an error)** → fix the code. If the rule genuinely cannot apply, use a *scoped* `#pragma warning disable <ID>` with a justification comment — never a blanket suppression. See the rationale in `openspec/specs/editorconfig-and-analyzers/spec.md`.
 - **Test failure** → fix the code and re-run `dotnet test` before re-requesting review.
 
-## Opening a pull request
+## Delivering a change
 
-- Use the [`PULL_REQUEST_TEMPLATE.md`](PULL_REQUEST_TEMPLATE.md) — it prompts for a summary, test evidence, and the quality-gate checklist.
-- Tag the OpenSpec change(s) the PR implements (`openspec/changes/<name>` → `openspec/specs/<cap>/spec.md` after archiving).
-- Wait for the required checks to pass and for one approving review before merging.
-- After merge, the change must be **archived** (`openspec archive <name> -y`) and the archive commit lands through the same PR flow.
+- Record the summary, test evidence, and quality-gate checklist in the commit
+  body or handoff notes; the PR template is retained only for external
+  contributors.
+- Tag the OpenSpec change implemented (`openspec/changes/<name>` becomes
+  `openspec/specs/<cap>/spec.md` after archiving).
+- Archive with `openspec archive <name> -y`, then commit the archive directly on
+  `main`.
 
 ## Review checklist
 
