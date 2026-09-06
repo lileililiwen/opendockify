@@ -58,20 +58,38 @@ Flutter analysis, and Flutter tests.
 
 The workflow **must pass before merge** (required status check).
 
-## SonarCloud quality gate (optional, host-side setup)
+## Quality gate (enforced on every run)
 
-The CI workflow already contains the Sonar steps; they activate automatically once the repository secrets below are set. To turn on continuous analysis and the merge-request quality gate:
+The code-quality gate is **enforced on every CI run**, never silently skipped:
+
+- **With `SONAR_TOKEN` configured**, the SonarCloud gate runs (`Sonar Begin/End` with
+  `sonar.qualitygate.wait=true`) and blocks the pipeline on a red new-code gate
+  (bugs/vulnerabilities/smells/duplication/coverage).
+- **Without `SONAR_TOKEN`**, the SonarCloud analysis is skipped, but an always-on
+  **fallback quality gate** runs instead: `dotnet format OpenDockify.sln analyzers
+  --verify-no-changes --severity error`. It fails the build on any configured Roslyn
+  analyzer violation (including `SonarAnalyzer.CSharp` rules set to error severity and
+  the `.editorconfig` naming/style rules). A `::warning::` is emitted so the skipped
+  SonarCloud analysis is visible rather than silent.
+
+In addition, `Directory.Build.props` sets `TreatWarningsAsErrors=true` and
+`EnforceCodeStyleInBuild=true`, so the `Build` step itself already fails on compiler
+warnings and code-style violations.
+
+### Required secrets for the full SonarCloud gate
+
+The SonarCloud gate activates automatically once these repository secrets are set:
 
 1. Create a project on [SonarCloud](https://sonarcloud.io) for this repository.
-2. Add repository secrets so the `Sonar Begin/End` steps run:
-   - `SONAR_TOKEN` — a SonarCloud user/analysis token.
+2. Add the repository secrets below so the `Sonar Begin/End` steps run:
+   - `SONAR_TOKEN` — a SonarCloud user/analysis token (required to enable SonarCloud).
    - `SONAR_ORG` — your SonarCloud organization key.
    - `SONAR_PROJECT_KEY` — the project key from step 1.
    - `SONAR_HOST_URL` — `https://sonarcloud.io` (or your self-hosted SonarQube URL).
 3. In the SonarCloud project, enable the **New Code** quality gate (e.g. coverage ≥ 80%, bugs/vulnerabilities/smells = 0, duplicated lines < 3%). Old code is measured but not gating.
 4. Add the Sonar analysis check to the required status checks on `main` (alongside the `build` check) so a red gate blocks merges.
 
-The `Sonar End` step runs with `sonar.qualitygate.wait=true`, so CI fails when the new-code gate is red. Coverage XML is produced by `dotnet test` via `Coverlet.runsettings` (OpenCover format). If the secrets are absent the pipeline runs the format/build/test gates only.
+The `Sonar End` step runs with `sonar.qualitygate.wait=true`, so CI fails when the new-code gate is red. Coverage XML is produced by `dotnet test` via `Coverlet.runsettings` (OpenCover format).
 
 ## AI involvement markers
 

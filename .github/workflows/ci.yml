@@ -50,6 +50,25 @@ jobs:
         # Fails on any drift from the .editorconfig (deterministic formatting).
         run: dotnet format OpenDockify.sln --verify-no-changes --no-restore
 
+      - name: Quality gate status
+        # The SonarCloud web gate only runs when SONAR_TOKEN is configured.
+        # When it cannot run we must NOT silently pass: the always-on
+        # fallback gate below enforces quality instead. This step makes the
+        # situation loud and visible rather than hidden.
+        run: |
+          if [ -z "$SONAR_TOKEN" ]; then
+            echo "::warning::SONAR_TOKEN is not set — SonarCloud analysis is skipped. The always-on fallback quality gate (Roslyn analyzers) is enforcing quality instead of passing silently."
+          else
+            echo "::notice::SONAR_TOKEN detected — the SonarCloud quality gate will run and block on quality issues."
+          fi
+
+      - name: Fallback quality gate (always on)
+        # Enforced on every run, independent of SonarCloud. Fails the build when
+        # any configured Roslyn analyzer (including SonarAnalyzer.CSharp rules set
+        # to error severity and the .editorconfig naming/style rules) reports a
+        # violation. This is the substitute gate when SONAR_TOKEN is absent.
+        run: dotnet format OpenDockify.sln analyzers --verify-no-changes --severity error --no-restore
+
       - name: Sonar Begin
         if: env.SONAR_TOKEN != ''
         env:
