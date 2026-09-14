@@ -36,6 +36,19 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\dotnet-platform-libs\src\Platform.Identity.AspNetCore\Platform.Identity.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\..\dotnet-platform-libs\src\Platform.AspNetCore\Platform.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\..\dotnet-platform-libs\src\Platform.Web\Platform.Web.csproj" />
+    <ProjectReference Include="..\..\..\dotnet-platform-libs\src\Platform.Web.Cors\Platform.Web.Cors.csproj" />
+    <ProjectReference Include="..\..\..\dotnet-platform-libs\src\Platform.Web.Resilience\Platform.Web.Resilience.csproj" />
+    <ProjectReference Include="..\..\..\dotnet-platform-libs\src\Platform.Web.Versioning\Platform.Web.Versioning.csproj" />
+    <ProjectReference Include="..\..\..\dotnet-platform-libs\src\Platform.Web.Telemetry\Platform.Web.Telemetry.csproj" />
+    <ProjectReference Include="..\..\..\dotnet-platform-libs\src\Platform.Web.OpenApi\Platform.Web.OpenApi.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Asp.Versioning.Http" Version="8.1.*" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.*" />
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="8.*" />
   </ItemGroup>
 
 </Project>

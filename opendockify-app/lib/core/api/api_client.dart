@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 
 import 'package:dio/dio.dart';
 
@@ -19,6 +20,19 @@ class TokenProvider {
   String? refreshToken;
 }
 
+/// Generates the `X-Correlation-Id` value sent on every request. The server
+/// echoes the header on the response and uses it for log correlation, so
+/// the client always supplies one even when the caller does not.
+String generateCorrelationId() {
+  final random = Random.secure();
+  final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
+  bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant
+  String hex(int value) => value.toRadixString(16).padLeft(2, '0');
+  final b = bytes.map(hex).join();
+  return '${b.substring(0, 8)}-${b.substring(8, 12)}-${b.substring(12, 16)}-${b.substring(16, 20)}-${b.substring(20, 32)}';
+}
+
 class AuthInterceptor extends Interceptor {
   AuthInterceptor(this._tokens);
 
@@ -30,6 +44,7 @@ class AuthInterceptor extends Interceptor {
     if (token != null && token.isNotEmpty) {
       options.headers['Authorization'] = 'Bearer $token';
     }
+    options.headers.putIfAbsent('X-Correlation-Id', () => generateCorrelationId());
     handler.next(options);
   }
 }
@@ -662,14 +677,19 @@ class ApiClient {
 
   ApiError _mapError(DioException e) {
     final status = e.response?.statusCode;
-    final message = _extractError(e.response?.data);
+    final correlationId = e.response?.headers.value('X-Correlation-Id');
+    final extracted = _extractError(e.response?.data);
+    final message = extracted?.message;
+    final code = extracted?.code;
     if (e.type == DioExceptionType.connectionError ||
         e.type == DioExceptionType.connectionTimeout ||
         e.type == DioExceptionType.receiveTimeout ||
         e.type == DioExceptionType.sendTimeout) {
-      return const ApiError(
+      return ApiError(
         ApiErrorKind.network,
         'Cannot reach server. Check the connection settings.',
+        code: code,
+        correlationId: correlationId,
       );
     }
     if (status == null) {
@@ -677,6 +697,8 @@ class ApiClient {
         ApiErrorKind.unknown,
         message ?? 'Something went wrong.',
         statusCode: status,
+        code: code,
+        correlationId: correlationId,
       );
     }
     switch (status) {
@@ -686,17 +708,27 @@ class ApiClient {
           ApiErrorKind.unauthorized,
           message ?? 'Session expired. Please log in again.',
           statusCode: status,
+          code: code,
+          correlationId: correlationId,
         );
       case 403:
         final kind = (message?.toLowerCase().contains('ai disabled') ?? false)
             ? ApiErrorKind.aiDisabled
             : ApiErrorKind.forbidden;
-        return ApiError(kind, message ?? 'Forbidden.', statusCode: status);
+        return ApiError(
+          kind,
+          message ?? 'Forbidden.',
+          statusCode: status,
+          code: code,
+          correlationId: correlationId,
+        );
       case 404:
         return ApiError(
           ApiErrorKind.notFound,
           message ?? 'Not found.',
           statusCode: status,
+          code: code,
+          correlationId: correlationId,
         );
       case 400:
       case 409:
@@ -705,34 +737,55 @@ class ApiClient {
           ApiErrorKind.validation,
           message ?? 'Invalid request.',
           statusCode: status,
+          code: code,
+          correlationId: correlationId,
         );
       case 429:
         return ApiError(
           ApiErrorKind.rateLimited,
           message ?? 'Rate limit reached.',
           statusCode: status,
+          code: code,
+          correlationId: correlationId,
         );
       case >= 500:
         return ApiError(
           ApiErrorKind.server,
           message ?? 'The server reported an error.',
           statusCode: status,
+          code: code,
+          correlationId: correlationId,
         );
       default:
         return ApiError(
           ApiErrorKind.unknown,
           message ?? 'Something went wrong.',
           statusCode: status,
+          code: code,
+          correlationId: correlationId,
         );
     }
   }
 
-  static String? _extractError(Object? data) {
+  static _ErrorPayload? _extractError(Object? data) {
     if (data is Map) {
-      final value = data['error'];
-      if (value is String && value.isNotEmpty) return value;
+      final envelope = data['error'];
+      if (envelope is Map) {
+        final code = envelope['code']?.toString();
+        final message = envelope['message']?.toString();
+        if ((code != null && code.isNotEmpty) ||
+            (message != null && message.isNotEmpty)) {
+          return _ErrorPayload(message, code);
+        }
+      }
+      final value = envelope;
+      if (value is String && value.isNotEmpty) {
+        return _ErrorPayload(value, null);
+      }
     }
-    if (data is String && data.isNotEmpty) return data;
+    if (data is String && data.isNotEmpty) {
+      return _ErrorPayload(data, null);
+    }
     return null;
   }
 
@@ -744,4 +797,10 @@ class ApiClient {
 
   static List<dynamic> _asList(Object? value) =>
       value is List ? value : const [];
+}
+
+class _ErrorPayload {
+  const _ErrorPayload(this.message, this.code);
+  final String? message;
+  final String? code;
 }

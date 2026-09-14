@@ -297,3 +297,87 @@ can only reach intended segments.
 
 Secrets never appear in listings, logs, or delivery records: token verifiers,
 clear tokens, subscription secrets, request bodies, and signatures are all excluded.
+
+---
+
+## 6. Web edge posture
+
+The API ships a standardized request pipeline that callers should rely on.
+None of the behavior is optional in production; self-hosters inherit the
+defaults and can opt in/out with the keys below.
+
+### CORS
+
+Browser callers are restricted to an explicit allowlist; the API is deny-by-default.
+
+| Environment | `Web:Cors:AllowedOrigins` | Effect |
+|---|---|---|
+| `Development` | `http://localhost:8080` (default) | Local web client allowed; nothing else. |
+| `Production` | unset | **All browser callers blocked.** Set the key to a comma-separated list of allowed origins. |
+| `Production` | `https://app.example,https://admin.example` | Only those origins receive `Access-Control-Allow-Origin`. |
+
+Preflight requests from unlisted origins are answered without
+`Access-Control-Allow-Origin` and the request fails closed in the browser.
+Credentials are not allowed (`Access-Control-Allow-Credentials` is never set).
+
+### Correlation
+
+Every request gets a `X-Correlation-Id` (UUIDv4). Clients may send their own
+and the server echoes it back on the response; the same id is attached to
+log lines for the request. The Flutter client always generates one and
+captures the echoed value on errors so support tickets can reference it.
+
+### Errors
+
+Untrusted 4xx/5xx responses are normalized to a safe envelope; secrets, SQL,
+and stack traces are scrubbed server-side. The shape is the standard
+`{ "error": { "code": "...", "message": "..." } }` envelope used by the
+automation API above. Stable codes the client should switch on include:
+
+- `validation_failed` (400)
+- `unauthorized` / `token_invalid` (401)
+- `forbidden_scope` (403)
+- `not_found` (404)
+- `conflict_idempotency_key` (409)
+- `rate_limited` (429)
+- `server` (500, generic — no internal detail)
+
+When the API cannot return a meaningful 4xx, it returns a sanitized `500`
+with `code: "server"` and the `X-Correlation-Id` so deployers can find the
+matching log line. Clients must surface the correlation id to users when
+filing support requests.
+
+### Forwarded headers and IP rate limits
+
+Behind a reverse proxy, the API trusts `X-Forwarded-For` / `X-Forwarded-Proto`
+**only** from proxies explicitly listed in `ForwardedHeaders:KnownProxies` /
+`KnownNetworks`. In production, set both arrays to the fronting proxy's
+addresses; development trusts loopback only. The first IP in the forwarded
+chain is used as the rate-limit key — without this, every request looks like
+the proxy and the per-IP limits become useless.
+
+### AI endpoint security
+
+`Ai:Endpoint` must be `https://` unless it targets loopback
+(`localhost`/`127.0.0.1`) **and** `Ai:AllowInsecureHttp=true`. The validator
+fails closed at startup; the AI client also re-checks before each call so a
+runtime-misconfigured endpoint cannot leak prompts in clear text.
+
+### Secret separation
+
+`Sharing:HashKey` (used to sign share links) must be a 32+ byte secret
+**distinct from** `Jwt:Secret`. Sharing the same value across both surfaces
+turns a JWT-signing-material leak into a share-link forgery vector. The
+startup validator refuses to boot when the values are equal or missing
+in production.
+
+### Configuration reference
+
+| Key | Default | Meaning |
+|---|---|---|
+| `Web:Cors:AllowedOrigins` | `http://localhost:8080` in dev, empty in prod | Comma-separated allowlist of browser origins. |
+| `Web:Hsts` | `true` in prod | Enforces `Strict-Transport-Security`; required in production. |
+| `ForwardedHeaders:KnownProxies` | loopback only | Trusted proxy IPs that may set `X-Forwarded-For`. |
+| `ForwardedHeaders:KnownNetworks` | none | Trusted CIDR networks that may set `X-Forwarded-For`. |
+| `Ai:AllowInsecureHttp` | `false` | Permits `http://` loopback endpoints for local Ollama. |
+| `Sharing:HashKey` | required in prod | 32+ byte secret distinct from `Jwt:Secret`. |

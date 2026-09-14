@@ -23,6 +23,9 @@ class FakeAdapter implements HttpClientAdapter {
   ) async {
     requests.add(options);
     final body = responder?.call(options);
+    if (body is ResponseBody) {
+      return body;
+    }
     final statusCode = body is int ? body : 200;
     final data = body is int ? null : body;
     return ResponseBody.fromString(
@@ -213,6 +216,62 @@ void main() {
         isA<ApiError>().having((e) => e.kind, 'kind', ApiErrorKind.notFound),
       ),
     );
+  });
+
+  test('every request sends a generated X-Correlation-Id', () async {
+    await client.me();
+    final headers = adapter.requests.last.headers;
+    final id = headers['X-Correlation-Id'] as String?;
+    expect(id, isNotNull);
+    expect(id, matches(RegExp(r'^[0-9a-f-]{36}$')));
+  });
+
+  test('correlation ids are unique per request', () async {
+    await client.me();
+    await client.listMarketplace();
+    final first = adapter.requests[0].headers['X-Correlation-Id'];
+    final second = adapter.requests[1].headers['X-Correlation-Id'];
+    expect(first, isNot(second));
+  });
+
+  test('error body with code surfaces on ApiError', () async {
+    adapter.responder = (options) => ResponseBody.fromString(
+      jsonEncode({
+        'error': {'code': 'validation_failed', 'message': 'amount must be > 0'},
+      }),
+      400,
+      headers: {
+        Headers.contentTypeHeader: [Headers.jsonContentType],
+      },
+    );
+    await expectLater(
+      client.me(),
+      throwsA(
+        isA<ApiError>()
+            .having((e) => e.kind, 'kind', ApiErrorKind.validation)
+            .having((e) => e.code, 'code', 'validation_failed')
+            .having((e) => e.message, 'message', 'amount must be > 0'),
+      ),
+    );
+  });
+
+  test('echoed X-Correlation-Id is captured on ApiError', () async {
+    final correlationId = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+    adapter.responder = (options) => ResponseBody.fromString(
+      jsonEncode({'error': {'code': 'server', 'message': 'boom'}}),
+      500,
+      headers: {
+        Headers.contentTypeHeader: [Headers.jsonContentType],
+        'x-correlation-id': [correlationId],
+      },
+    );
+    try {
+      await client.me();
+      fail('expected ApiError');
+    } on ApiError catch (e) {
+      expect(e.correlationId, correlationId);
+      expect(e.code, 'server');
+    }
   });
 }
 

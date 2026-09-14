@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using OpenDockify.SystemConfig.Services;
 
@@ -9,13 +10,14 @@ namespace OpenDockify.AiAssist.Services;
 /// <summary>
 /// OpenAI-compatible chat-completions client. Endpoint, API key, and model are
 /// read from system config at call time (<c>Ai.Endpoint</c>, <c>Ai.ApiKey</c>,
-/// <c>Ai.Model</c>, <c>Ai.TimeoutSeconds</c>) — never from source code. One
-/// retry on failure; a clear error is returned when the endpoint is missing or
-/// unreachable.
+/// <c>Ai.Model</c>, <c>Ai.TimeoutSeconds</c>) — never from source code. Retry,
+/// per-attempt timeout, and circuit-breaker behavior are supplied by the
+/// platform HTTP resilience handler attached in the API composition root.
 /// </summary>
 public sealed class OpenAiCompatibleLlmClient(
     ISystemConfigReader config,
-    IHttpClientFactory httpClientFactory) : ILlmClient
+    IHttpClientFactory httpClientFactory,
+    IConfiguration configuration) : ILlmClient
 {
     private static readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -39,6 +41,11 @@ public sealed class OpenAiCompatibleLlmClient(
             return LlmResult.Failure("AI model is not configured.");
         }
 
+        if (!IsSecureEndpoint(endpoint, configuration))
+        {
+            return LlmResult.Failure("AI endpoint must use https:// unless it targets loopback and Ai:AllowInsecureHttp is true.");
+        }
+
         var url = endpoint.TrimEnd('/');
         if (!url.EndsWith("/chat/completions", StringComparison.OrdinalIgnoreCase))
         {
@@ -50,50 +57,64 @@ public sealed class OpenAiCompatibleLlmClient(
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutCts.CancelAfter(TimeSpan.FromSeconds(Math.Max(1, timeoutSeconds)));
 
-        // One retry on transport-level or non-success failures.
-        Exception? lastError = null;
-        for (var attempt = 0; attempt < 2; attempt++)
+        try
         {
-            try
+            using var httpClient = httpClientFactory.CreateClient(AiAssistClientNames.HttpClient);
+            using var request = new HttpRequestMessage(HttpMethod.Post, url)
             {
-                using var httpClient = httpClientFactory.CreateClient("ai-assist");
-                using var request = new HttpRequestMessage(HttpMethod.Post, url)
-                {
-                    Content = JsonContent.Create(requestBody, options: _jsonOptions),
-                };
+                Content = JsonContent.Create(requestBody, options: _jsonOptions),
+            };
 
-                if (!string.IsNullOrEmpty(apiKey))
-                {
-                    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
-                }
-
-                using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseContentRead, timeoutCts.Token);
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    lastError = new InvalidOperationException($"LLM endpoint returned {(int)response.StatusCode}.");
-                    continue;
-                }
-
-                var content = await response.Content.ReadAsStringAsync(cancellationToken);
-                var parsed = JsonSerializer.Deserialize<ChatCompletionsResponse>(content, _jsonOptions);
-                var text = parsed?.Choices?.FirstOrDefault()?.Message?.Content;
-
-                return string.IsNullOrWhiteSpace(text)
-                    ? LlmResult.Failure("LLM returned an empty response.")
-                    : LlmResult.Success(text);
-            }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            if (!string.IsNullOrEmpty(apiKey))
             {
-                lastError = new TimeoutException("LLM request timed out.");
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+
+            using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseContentRead, timeoutCts.Token);
+
+            if (!response.IsSuccessStatusCode)
             {
-                lastError = ex;
+                return LlmResult.Failure($"LLM endpoint returned {(int)response.StatusCode}.");
             }
+
+            var content = await response.Content.ReadAsStringAsync(cancellationToken);
+            var parsed = JsonSerializer.Deserialize<ChatCompletionsResponse>(content, _jsonOptions);
+            var text = parsed?.Choices?.FirstOrDefault()?.Message?.Content;
+
+            return string.IsNullOrWhiteSpace(text)
+                ? LlmResult.Failure("LLM returned an empty response.")
+                : LlmResult.Success(text);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return LlmResult.Failure("LLM request timed out.");
+        }
+        catch (Exception ex)
+        {
+            return LlmResult.Failure($"LLM request failed: {ex.Message}");
+        }
+    }
+
+    private static bool IsSecureEndpoint(string endpoint, IConfiguration configuration)
+    {
+        if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var uri))
+        {
+            return false;
         }
 
-        return LlmResult.Failure($"LLM request failed: {lastError?.Message ?? "unknown error"}");
+        if (uri.Scheme == Uri.UriSchemeHttps)
+        {
+            return true;
+        }
+
+        if (uri.Scheme != Uri.UriSchemeHttp)
+        {
+            return false;
+        }
+
+        var isLoopback = uri.IsLoopback;
+        var allowInsecure = bool.TryParse(configuration["Ai:AllowInsecureHttp"], out var parsed) && parsed;
+        return isLoopback && allowInsecure;
     }
 }
 
