@@ -8,6 +8,8 @@ using OpenDockify.Generation.Models;
 using OpenDockify.Rendering.Services;
 using OpenDockify.Templates.Models;
 using OpenDockify.Templates.Services;
+using Platform.Storage.Contracts;
+using Platform.Storage.Keys;
 
 namespace OpenDockify.Generation.Services;
 
@@ -126,8 +128,9 @@ public sealed record DocumentSnapshot(
 /// Orchestrates document generation: load accessible template → validate values
 /// (required, type, non-negative, range — blocking) → collect finance warnings
 /// (interest-rate vs LPR, non-blocking) → render → append risk notice → PDF →
-/// persist immutable record. Re-edit creates a new record with
-/// <see cref="Document.ParentId"/> set; the original never changes.
+/// upload to <see cref="IObjectStorage"/> → persist immutable record. Re-edit
+/// creates a new record with <see cref="Document.ParentId"/> set; the original
+/// never changes.
 /// </summary>
 public sealed class DocumentService(
     DbContext db,
@@ -135,7 +138,8 @@ public sealed class DocumentService(
     IPdfRenderer pdfRenderer,
     InterestRateService interestRateService,
     IDocumentReadAuthorizer readAuthorizer,
-    IConfiguration configuration)
+    IConfiguration configuration,
+    IObjectStorage objectStorage)
 {
     private static readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -168,24 +172,87 @@ public sealed class DocumentService(
 
         var documentsPath = configuration["Storage:DocumentsPath"] ?? "/app/data/documents";
         document.PdfPath = Path.Combine(documentsPath, userId.ToString(), $"{document.Id}.pdf");
+        document.PdfStorageKey = $"pdfs/{userId:N}/{document.Id:N}.pdf";
 
+        var tempPath = Path.Combine(
+            Path.GetTempPath(),
+            $"opendockify-render-{document.Id:N}.pdf");
         try
         {
-            await pdfRenderer.RenderAsync(fullText, document.PdfPath, cancellationToken);
-            await using var pdf = File.OpenRead(document.PdfPath);
+            await pdfRenderer.RenderAsync(fullText, tempPath, cancellationToken);
+            await using var pdf = File.OpenRead(tempPath);
             document.ContentSha256 = Convert.ToHexString(
                 await System.Security.Cryptography.SHA256.HashDataAsync(pdf, cancellationToken))
                 .ToLowerInvariant();
+            await UploadPdfAsync(document, tempPath, cancellationToken);
         }
         catch (Exception ex)
         {
             return GenerateResult.Failure(GenerationErrorKind.RenderError, $"PDF rendering failed: {ex.Message}");
+        }
+        finally
+        {
+            if (File.Exists(tempPath))
+            {
+                File.Delete(tempPath);
+            }
         }
 
         db.Set<Document>().Add(document);
         await db.SaveChangesAsync(cancellationToken);
 
         return GenerateResult.Success(document, templateName, preview.Warnings);
+    }
+
+    private async Task UploadPdfAsync(Document document, string sourcePath, CancellationToken cancellationToken)
+    {
+        var key = new StorageObjectKey(document.PdfStorageKey!);
+        await using var input = new FileStream(
+            sourcePath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            81920,
+            FileOptions.Asynchronous | FileOptions.SequentialScan);
+        var info = new FileInfo(sourcePath);
+        var request = new StorageUploadRequest(key, input, "application/pdf", info.Length);
+        var outcome = await objectStorage.UploadAsync(request, cancellationToken);
+        if (outcome.Status != StorageOutcomeStatus.Succeeded)
+        {
+            throw new InvalidOperationException(
+                outcome.Failure is null
+                    ? "PDF upload to object storage failed."
+                    : $"PDF upload to object storage failed: {outcome.Failure.Message}");
+        }
+    }
+
+    public async Task<StorageReadResult?> TryOpenPdfAsync(Document document, CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrEmpty(document.PdfStorageKey))
+        {
+            var result = await objectStorage.DownloadAsync(new StorageObjectKey(document.PdfStorageKey), cancellationToken);
+            if (result.Status == StorageOutcomeStatus.Succeeded)
+            {
+                return result.Value;
+            }
+        }
+
+        if (!string.IsNullOrEmpty(document.PdfPath) && File.Exists(document.PdfPath))
+        {
+            var info = new FileInfo(document.PdfPath);
+            var stream = new FileStream(
+                document.PdfPath,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read,
+                81920,
+                FileOptions.Asynchronous | FileOptions.SequentialScan);
+            return new StorageReadResult(
+                stream,
+                new StorageObjectMetadata(info.Length, "application/pdf", new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero), null));
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -453,7 +520,11 @@ public sealed class DocumentService(
         db.Set<Document>().Remove(document);
         await db.SaveChangesAsync(cancellationToken);
 
-        if (File.Exists(document.PdfPath))
+        if (!string.IsNullOrEmpty(document.PdfStorageKey))
+        {
+            await objectStorage.DeleteAsync(new StorageObjectKey(document.PdfStorageKey), cancellationToken);
+        }
+        else if (!string.IsNullOrEmpty(document.PdfPath) && File.Exists(document.PdfPath))
         {
             File.Delete(document.PdfPath);
         }

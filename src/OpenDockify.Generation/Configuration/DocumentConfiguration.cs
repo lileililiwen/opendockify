@@ -43,6 +43,9 @@ public sealed class DocumentConfiguration : IEntityTypeConfiguration<Document>
             .HasMaxLength(512)
             .IsRequired();
 
+        builder.Property(d => d.PdfStorageKey)
+            .HasMaxLength(512);
+
         builder.Property(d => d.ContentSha256)
             .HasMaxLength(64);
 

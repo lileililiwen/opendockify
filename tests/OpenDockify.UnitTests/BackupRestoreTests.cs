@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using OpenDockify.Generation.Models;
 using OpenDockify.Operations.Configuration;
 using OpenDockify.Operations.Services;
+using Platform.Storage.Local;
 using Xunit;
 
 namespace OpenDockify.UnitTests;
@@ -107,7 +108,9 @@ public sealed class BackupRestoreTests
         await db.SaveChangesAsync();
         try
         {
-            var report = await new ArchiveIntegrityService(db).CheckAsync();
+            var objectsRoot = Path.Combine(root, "objects");
+            Directory.CreateDirectory(objectsRoot);
+            var report = await new ArchiveIntegrityService(db, new LocalFileStorage(objectsRoot)).CheckAsync();
             Assert.Contains(report.Issues, x => x.Code == "missing-pdf" && x.DocumentId == missing);
             Assert.Contains(report.Issues, x => x.Code == "digest-mismatch" && x.DocumentId == altered);
             Assert.Equal("altered", await File.ReadAllTextAsync(alteredPath));

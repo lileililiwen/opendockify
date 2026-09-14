@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using OpenDockify.Operations.Models;
 using OpenDockify.Operations.Services;
+using Platform.Storage.Contracts;
 
 namespace OpenDockify.Api;
 
@@ -13,7 +14,7 @@ public static class OperationsEndpoints
         group.MapPost("/backups", async (BackupPassphraseRequest request, BackupCoordinator coordinator, CancellationToken ct) =>
         {
             var result = await coordinator.CreateAsync(request.Passphrase, ct);
-            return Results.Ok(new { result.OperationId, result.Path, result.Digest });
+            return Results.Ok(new { result.OperationId, path = result.Path, result.Digest });
         });
 
         group.MapPost("/validate", async (BackupPathRequest request, BackupCoordinator coordinator, CancellationToken ct) =>
@@ -40,9 +41,22 @@ public static class OperationsEndpoints
         group.MapPost("/digests/backfill", async (DigestBackfillRequest request, DocumentDigestBackfillService service, CancellationToken ct) =>
             Results.Ok(await service.RunAsync(request.MaximumDocuments, ct)));
 
-        group.MapGet("/status", async (DbContext db, CancellationToken ct) =>
-            Results.Ok(await db.Set<BackupOperation>().AsNoTracking()
-                .OrderByDescending(x => x.StartedAtUtc).Take(25).ToListAsync(ct)));
+        group.MapGet("/status", async (DbContext db, StorageHealthProbe storage, CancellationToken ct) =>
+        {
+            var operations = await db.Set<BackupOperation>().AsNoTracking()
+                .OrderByDescending(x => x.StartedAtUtc).Take(25).ToListAsync(ct);
+            var provider = storage.Current;
+            return Results.Ok(new
+            {
+                storage = new
+                {
+                    provider = provider.Provider,
+                    state = provider.State.ToString(),
+                    code = provider.Code,
+                },
+                operations,
+            });
+        });
 
         return endpoints;
     }

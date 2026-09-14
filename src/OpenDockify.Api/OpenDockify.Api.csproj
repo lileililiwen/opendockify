@@ -43,6 +43,9 @@
     <ProjectReference Include="..\..\..\dotnet-platform-libs\src\Platform.Web.Versioning\Platform.Web.Versioning.csproj" />
     <ProjectReference Include="..\..\..\dotnet-platform-libs\src\Platform.Web.Telemetry\Platform.Web.Telemetry.csproj" />
     <ProjectReference Include="..\..\..\dotnet-platform-libs\src\Platform.Web.OpenApi\Platform.Web.OpenApi.csproj" />
+    <ProjectReference Include="..\..\..\dotnet-platform-libs\src\Platform.Storage\Platform.Storage.csproj" />
+    <ProjectReference Include="..\..\..\dotnet-platform-libs\src\Platform.Storage.Local\Platform.Storage.Local.csproj" />
+    <ProjectReference Include="..\..\..\dotnet-platform-libs\src\Platform.Storage.S3\Platform.Storage.S3.csproj" />
   </ItemGroup>
 
   <ItemGroup>

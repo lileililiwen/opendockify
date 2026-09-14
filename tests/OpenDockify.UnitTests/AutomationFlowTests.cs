@@ -11,6 +11,7 @@ using OpenDockify.Integrations.Configuration;
 using OpenDockify.Integrations.Services;
 using OpenDockify.Templates.Models;
 using OpenDockify.Templates.Services;
+using Platform.Storage.Local;
 using Xunit;
 
 namespace OpenDockify.UnitTests;
@@ -44,8 +45,11 @@ public sealed class AutomationFlowTests : IDisposable
         var templates = new TemplateService(_db);
         var renderer = new FakePdfRenderer();
         var interestRates = new InterestRateService(new FixedConfigReader());
+        var objectsRoot = Path.Combine(_storageRoot, "objects");
+        Directory.CreateDirectory(objectsRoot);
         _documents = new DocumentService(
-            _db, templates, renderer, interestRates, new OwnerDocumentReadAuthorizer(_db), configuration);
+            _db, templates, renderer, interestRates, new OwnerDocumentReadAuthorizer(_db), configuration,
+            new LocalFileStorage(objectsRoot));
         _idempotency = new IdempotencyService(_db, Options.Create(new IntegrationsOptions()));
         _automation = new AutomationService(_db, templates, _documents, _idempotency);
     }

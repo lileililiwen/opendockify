@@ -5,6 +5,8 @@ using Microsoft.Extensions.Options;
 using OpenDockify.Generation.Models;
 using OpenDockify.Operations.Configuration;
 using OpenDockify.Operations.Models;
+using Platform.Storage.Contracts;
+using Platform.Storage.Keys;
 
 namespace OpenDockify.Operations.Services;
 
@@ -17,7 +19,8 @@ public sealed class BackupCoordinator(
     ArchiveIntegrityService integrity,
     BackupRetentionService retention,
     IConfiguration configuration,
-    IOptions<BackupOptions> options)
+    IOptions<BackupOptions> options,
+    IObjectStorage objectStorage)
 {
     private readonly BackupOptions _options = options.Value;
 
@@ -25,17 +28,24 @@ public sealed class BackupCoordinator(
     {
         var operation = Start(BackupOperationKind.Backup);
         var staging = Temp("backup");
+        var bundleName = $"opendockify-{DateTime.UtcNow:yyyyMMdd-HHmmss}-{operation.Id:N}.odbak";
+        var storageKey = new StorageObjectKey($"backups/{bundleName}");
         Directory.CreateDirectory(staging);
         try
         {
             await snapshots.CreateSnapshotAsync(Path.Combine(staging, "database"), ct);
             await CopyDocumentsAsync(Path.Combine(staging, "documents"), ct);
             Directory.CreateDirectory(_options.Directory);
-            var output = Path.Combine(_options.Directory, $"opendockify-{DateTime.UtcNow:yyyyMMdd-HHmmss}-{operation.Id:N}.odbak");
-            var digest = await bundles.CreateAsync(staging, output, passphrase, snapshots.ProviderName, ct);
-            await CompleteAsync(operation, BackupOperationState.Succeeded, digest, "Backup created.", ct);
+            var tempBundle = Path.Combine(Path.GetTempPath(), $"opendockify-bundle-{operation.Id:N}.odbak");
+            var digest = await bundles.CreateAsync(staging, tempBundle, passphrase, snapshots.ProviderName, ct);
+            await UploadBundleAsync(tempBundle, storageKey, ct);
+            if (File.Exists(tempBundle))
+            {
+                File.Delete(tempBundle);
+            }
+            await CompleteAsync(operation, BackupOperationState.Succeeded, digest, "Backup created.", ct, storageKey.Value);
             retention.Apply(DateTime.UtcNow);
-            return (operation.Id, output, digest);
+            return (operation.Id, storageKey.Value, digest);
         }
         catch (Exception ex)
         {
@@ -49,15 +59,18 @@ public sealed class BackupCoordinator(
     {
         var operation = Start(BackupOperationKind.Validation);
         string? extracted = null;
+        var storageKey = ResolveStorageKey(path);
+        string? downloadedBundle = null;
         try
         {
-            var result = await bundles.ValidateAndExtractAsync(ResolveBundlePath(path), passphrase, ct);
+            downloadedBundle = await DownloadBundleAsync(storageKey, ct);
+            var result = await bundles.ValidateAndExtractAsync(downloadedBundle, passphrase, ct);
             extracted = result.ExtractedDirectory;
             if (!string.Equals(result.Manifest.DatabaseProvider, snapshots.ProviderName, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("Cross-provider restore is not supported.");
             var counts = await ReadCountsAsync(extracted, result.Manifest.DatabaseProvider, ct);
             var receipt = receipts.Issue(result.Digest);
-            await CompleteAsync(operation, BackupOperationState.Succeeded, result.Digest, "Backup validated.", ct);
+            await CompleteAsync(operation, BackupOperationState.Succeeded, result.Digest, "Backup validated.", ct, storageKey.Value);
             return new(true, result.Digest, receipt, result.Manifest.DatabaseProvider, counts, 5, null);
         }
         catch (Exception ex)
@@ -65,7 +78,13 @@ public sealed class BackupCoordinator(
             await CompleteAsync(operation, BackupOperationState.Failed, null, Safe(ex), CancellationToken.None);
             return new(false, null, null, snapshots.ProviderName, new Dictionary<string, int>(), 0, Safe(ex));
         }
-        finally { if (extracted is not null && Directory.Exists(extracted)) Directory.Delete(extracted, true); }
+        finally
+        {
+            if (extracted is not null && Directory.Exists(extracted))
+                Directory.Delete(extracted, true);
+            if (downloadedBundle is not null && File.Exists(downloadedBundle))
+                File.Delete(downloadedBundle);
+        }
     }
 
     public async Task<Guid> RestoreAsync(string path, string passphrase, string digest, string receipt, CancellationToken ct)
@@ -75,10 +94,13 @@ public sealed class BackupCoordinator(
         var operation = Start(BackupOperationKind.Restore);
         string? extracted = null;
         string? rollback = null;
+        string? downloadedBundle = null;
         maintenance.Enter();
         try
         {
-            var validated = await bundles.ValidateAndExtractAsync(ResolveBundlePath(path), passphrase, ct);
+            var storageKey = ResolveStorageKey(path);
+            downloadedBundle = await DownloadBundleAsync(storageKey, ct);
+            var validated = await bundles.ValidateAndExtractAsync(downloadedBundle, passphrase, ct);
             extracted = validated.ExtractedDirectory;
             if (!string.Equals(validated.Digest, digest, StringComparison.Ordinal))
                 throw new InvalidOperationException("Bundle changed after validation.");
@@ -92,7 +114,7 @@ public sealed class BackupCoordinator(
             await RestoreSqliteAsync(extracted, rollback);
             await RestoreDocumentsAsync(extracted, rollback, ct);
             await VerifyRestoredSqliteAsync(ct);
-            await CompleteAsync(operation, BackupOperationState.Succeeded, digest, "Restore verified.", ct);
+            await CompleteAsync(operation, BackupOperationState.Succeeded, digest, "Restore verified.", ct, storageKey.Value);
             Directory.Delete(rollback, true);
             rollback = null;
             maintenance.Exit();
@@ -113,12 +135,73 @@ public sealed class BackupCoordinator(
         {
             if (extracted is not null && Directory.Exists(extracted))
                 Directory.Delete(extracted, true);
+            if (downloadedBundle is not null && File.Exists(downloadedBundle))
+                File.Delete(downloadedBundle);
         }
     }
 
     public Task<IntegrityReport> CheckIntegrityAsync(CancellationToken ct)
     {
         return integrity.CheckAsync(ct);
+    }
+
+    private async Task UploadBundleAsync(string sourcePath, StorageObjectKey key, CancellationToken ct)
+    {
+        var info = new FileInfo(sourcePath);
+        await using var input = new FileStream(
+            sourcePath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            81920,
+            FileOptions.Asynchronous | FileOptions.SequentialScan);
+        var request = new StorageUploadRequest(key, input, "application/octet-stream", info.Length);
+        var outcome = await objectStorage.UploadAsync(request, ct);
+        if (outcome.Status != StorageOutcomeStatus.Succeeded)
+        {
+            var message = outcome.Failure is null ? "backup upload failed" : outcome.Failure.Message;
+            throw new InvalidOperationException($"Backup upload to object storage failed: {message}");
+        }
+    }
+
+    private async Task<string> DownloadBundleAsync(StorageObjectKey key, CancellationToken ct)
+    {
+        var result = await objectStorage.DownloadAsync(key, ct);
+        if (result.Status != StorageOutcomeStatus.Succeeded || result.Value is null)
+        {
+            var message = result switch
+            {
+                { Status: StorageOutcomeStatus.NotFound } => "Backup bundle was not found in object storage.",
+                { Failure: { } f } => f.Message,
+                _ => "Backup bundle could not be downloaded from object storage.",
+            };
+            throw new InvalidOperationException(message);
+        }
+
+        var temp = Path.Combine(Path.GetTempPath(), $"opendockify-bundle-dl-{Guid.NewGuid():N}.odbak");
+        await using (var output = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+        {
+            await result.Value.Content.CopyToAsync(output, ct);
+        }
+        await result.Value.DisposeAsync();
+        return temp;
+    }
+
+    private static StorageObjectKey ResolveStorageKey(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            throw new InvalidOperationException("Backup storage key is required.");
+        // Accept either a full forward-slash storage key (`backups/foo.odbak`) or a
+        // bare bundle name (`opendockify-...odbak`); the legacy absolute file path
+        // is no longer supported because bundles now live in object storage.
+        var trimmed = path.Trim();
+        if (trimmed.Contains('\\') || Path.IsPathRooted(trimmed))
+        {
+            throw new InvalidOperationException("Backup bundles are now identified by their object storage key (e.g. 'backups/name.odbak').");
+        }
+        return trimmed.StartsWith("backups/", StringComparison.OrdinalIgnoreCase)
+            ? new StorageObjectKey(trimmed)
+            : new StorageObjectKey($"backups/{trimmed}");
     }
 
     private BackupOperation Start(BackupOperationKind kind)
@@ -128,10 +211,11 @@ public sealed class BackupCoordinator(
         return operation;
     }
 
-    private async Task CompleteAsync(BackupOperation operation, BackupOperationState state, string? digest, string summary, CancellationToken ct)
+    private async Task CompleteAsync(BackupOperation operation, BackupOperationState state, string? digest, string summary, CancellationToken ct, string? storageKey = null)
     {
         operation.State = state;
         operation.BundleDigest = digest;
+        operation.BundleStorageKey = storageKey;
         operation.Summary = summary;
         operation.CompletedAtUtc = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
@@ -140,16 +224,35 @@ public sealed class BackupCoordinator(
     private async Task CopyDocumentsAsync(string destination, CancellationToken ct)
     {
         Directory.CreateDirectory(destination);
-        var documents = await db.Set<Document>().AsNoTracking().Select(x => new { x.Id, x.PdfPath }).ToListAsync(ct);
+        var documents = await db.Set<Document>().AsNoTracking()
+            .Select(x => new { x.Id, x.PdfPath, x.PdfStorageKey })
+            .ToListAsync(ct);
         foreach (var document in documents)
         {
             ct.ThrowIfCancellationRequested();
-            if (!File.Exists(document.PdfPath))
-                throw new InvalidDataException($"Document {document.Id} has no PDF.");
             var target = Path.Combine(destination, $"{document.Id:N}.pdf");
-            await using var source = new FileStream(document.PdfPath, FileMode.Open, FileAccess.Read, FileShare.Read);
             await using var output = new FileStream(target, FileMode.CreateNew, FileAccess.Write, FileShare.None);
-            await source.CopyToAsync(output, ct);
+            var copied = false;
+            if (!string.IsNullOrEmpty(document.PdfStorageKey))
+            {
+                var result = await objectStorage.DownloadAsync(new StorageObjectKey(document.PdfStorageKey), ct);
+                if (result.Status == StorageOutcomeStatus.Succeeded && result.Value is not null)
+                {
+                    await result.Value.Content.CopyToAsync(output, ct);
+                    await result.Value.DisposeAsync();
+                    copied = true;
+                }
+            }
+            if (!copied && !string.IsNullOrEmpty(document.PdfPath) && File.Exists(document.PdfPath))
+            {
+                await using var source = new FileStream(document.PdfPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+                await source.CopyToAsync(output, ct);
+                copied = true;
+            }
+            if (!copied)
+            {
+                throw new InvalidDataException($"Document {document.Id} has no PDF.");
+            }
         }
     }
 
@@ -216,6 +319,30 @@ public sealed class BackupCoordinator(
                 target = Path.Combine(live, id.ToString("N") + ".pdf");
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
             File.Copy(file, target, true);
+
+            // Mirror the restored file into object storage so the new download
+            // path (storage -> 206) works without a separate backfill job.
+            var storageKey = !string.IsNullOrEmpty(document.PdfStorageKey)
+                ? new StorageObjectKey(document.PdfStorageKey)
+                : new StorageObjectKey($"pdfs/{document.OwnerId:N}/{id:N}.pdf");
+            var info = new FileInfo(target);
+            await using var input = new FileStream(
+                target,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read,
+                81920,
+                FileOptions.Asynchronous | FileOptions.SequentialScan);
+            var outcome = await objectStorage.UploadAsync(
+                new StorageUploadRequest(storageKey, input, "application/pdf", info.Length),
+                ct);
+            if (outcome.Status != StorageOutcomeStatus.Succeeded)
+            {
+                throw new InvalidOperationException(
+                    outcome.Failure is null
+                        ? "Restored PDF upload to object storage failed."
+                        : $"Restored PDF upload to object storage failed: {outcome.Failure.Message}");
+            }
         }
     }
 
@@ -249,15 +376,6 @@ public sealed class BackupCoordinator(
             Directory.Move(rollbackDocs, liveDocs);
         await VerifyRestoredSqliteAsync(ct);
         maintenance.Exit();
-    }
-
-    private string ResolveBundlePath(string path)
-    {
-        var root = Path.GetFullPath(_options.Directory) + Path.DirectorySeparatorChar;
-        var full = Path.GetFullPath(path);
-        if (!full.StartsWith(root, StringComparison.Ordinal) || File.GetAttributes(full).HasFlag(FileAttributes.ReparsePoint))
-            throw new InvalidOperationException("Bundle must be a regular file in the configured backup directory.");
-        return full;
     }
 
     private static string Temp(string purpose)

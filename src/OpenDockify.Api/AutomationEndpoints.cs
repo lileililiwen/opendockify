@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Net;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
@@ -5,6 +7,8 @@ using Microsoft.AspNetCore.RateLimiting;
 using OpenDockify.Generation.Models;
 using OpenDockify.Generation.Services;
 using OpenDockify.Integrations.Services;
+using Platform.Storage.Contracts;
+using Platform.Storage.Keys;
 
 namespace OpenDockify.Api;
 
@@ -153,6 +157,7 @@ public static class AutomationEndpoints
             HttpContext http,
             Guid id,
             DocumentService documents,
+            IObjectStorage storage,
             CancellationToken ct) =>
         {
             var access = await documents.GetAsync(OwnerId(http), id, ct);
@@ -161,10 +166,28 @@ public static class AutomationEndpoints
                 return ErrorContent("not_found", "Document not found.", null, StatusCodes.Status404NotFound);
             }
 
-            var path = access.Value!.Document.PdfPath;
-            return File.Exists(path)
-                ? Results.File(path, "application/pdf", fileDownloadName: $"{id}.pdf", enableRangeProcessing: false)
-                : ErrorContent("not_found", "PDF file is missing.", null, StatusCodes.Status404NotFound);
+            var document = access.Value!.Document;
+            var key = !string.IsNullOrEmpty(document.PdfStorageKey) ? document.PdfStorageKey : null;
+            if (key is null)
+            {
+                return ErrorContent("not_found", "PDF file is missing.", null, StatusCodes.Status404NotFound);
+            }
+
+            // 15-minute presigned operation; never exposes bucket credentials.
+            var presign = await storage.PresignAsync(
+                new PresignRequest(new StorageObjectKey(key), StorageOperation.Download, TimeSpan.FromMinutes(15)),
+                ct);
+            if (presign.Outcome.Status != StorageOutcomeStatus.Succeeded || presign.Operation is null)
+            {
+                return ErrorContent("storage_unavailable", "The object storage provider is unavailable.", null, StatusCodes.Status503ServiceUnavailable);
+            }
+
+            return Results.Ok(new
+            {
+                documentId = document.Id,
+                pdfUrl = presign.Operation.Url,
+                expiresAt = presign.Operation.ExpiresAt,
+            });
         })
         .RequireAuthorization(AutomationAuthorization.PolicyFor(AutomationScopes.DocumentsRead));
 

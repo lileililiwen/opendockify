@@ -44,6 +44,14 @@ public sealed class Document
 
     public string PdfPath { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Storage key under which the PDF lives in <c>IObjectStorage</c>. When
+    /// present, the canonical download path goes through object storage; the
+    /// legacy <see cref="PdfPath"/> is kept for lazy backfill and as a
+    /// fallback when the storage provider is unavailable.
+    /// </summary>
+    public string? PdfStorageKey { get; set; }
+
     /// <summary>SHA-256 of the finalized PDF, used by read-only archive verification.</summary>
     public string? ContentSha256 { get; set; }
 

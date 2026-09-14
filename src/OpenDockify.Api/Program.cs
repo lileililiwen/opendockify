@@ -67,6 +67,7 @@ builder.Services.AddOperationsModule(builder.Configuration);
 builder.Services.AddIntegrationsModule(builder.Configuration);
 builder.Services.AddAiAssistModule();
 builder.Services.AddEsignModule();
+builder.Services.AddStorageModule(builder.Configuration);
 
 // Platform identity-lifecycle composition: wires the registered refresh /
 // recovery / 2FA stores into the platform coordinator.

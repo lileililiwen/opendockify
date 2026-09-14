@@ -9,6 +9,7 @@ public sealed class BackupOperation
     public BackupOperationKind Kind { get; set; }
     public BackupOperationState State { get; set; }
     public string? BundleDigest { get; set; }
+    public string? BundleStorageKey { get; set; }
     public string Summary { get; set; } = string.Empty;
     public DateTime StartedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime? CompletedAtUtc { get; set; }
