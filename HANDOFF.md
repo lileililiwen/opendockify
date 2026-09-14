@@ -23,7 +23,14 @@ Self-hosted constraint holds: no SaaS, no cloud services, no paid keys. Excluded
   - `flutter analyze --no-pub`: no issues; `flutter test`: 92/92 green (14 session incl. refresh/2FA).
   - HTTP smoke (`:5555`, fresh sqlite): rotation 200 → reuse 401 + family dead 401 → logout 204 → refresh 401 → change-password 200 → refresh 401 → recovery 202 known + 202 unknown → TOTP login `2fa-required` → verify 200 → admin disable → login 401 → 5× wrong + correct → 429.
   - Bugs found by smoke and fixed: `/refresh` parsed the new opaque handle as Guid (500); `OrderByDescending` on DateTimeOffset in `ResolveSubjectAsync` (SQLite, 500); `/2fa/verify` required auth so login-2FA could never complete (now anonymous, subject from challenge); `/register` issued no refresh handle (now full session); login now issues the 2FA challenge (was null).
+- `platform-web-edge` DONE 2026-09-14, commit `b4accbf` on `main`, archived as `2026-09-14-platform-web-edge`, spec `web-edge-hardening` (+2 requirements).
+  - `dotnet build OpenDockify.sln`: 0 errors (2 pre-existing MSB3277 EF-version warnings, unrelated).
+  - `dotnet test OpenDockify.sln`: 191/191 green (174 prior + 17 new `WebEdgeBootstrapTests`).
+  - `flutter analyze`: no issues; `flutter test`: 96/96 green (92 prior + 4 new correlation/code contract tests).
+  - HTTP smoke dev (`:5555`): correlation generated when absent and echoed when supplied, security headers (`X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `CSP frame-ancestors 'none'`) on every response, CORS preflight from unlisted origin omits `Access-Control-Allow-Origin` and the allowlist origin (`http://localhost:8080`) returns the full CORS headers, `/health` and `/openapi/v1.json` mapped, `X-Forwarded-For` honored from loopback.
+  - HTTP smoke prod (`:5556`): same defaults; `Sharing:HashKey == Jwt:Secret` refuses to start with the web-edge validator message; remote `http://` `Ai:Endpoint` refuses to start; loopback `http://` is allowed only when `Ai:AllowInsecureHttp=true`; HSTS enforced; `Web:Cors:AllowedOrigins` explicit allowlist (`https://app.example,https://admin.example`) — preflight from each allowed origin returns `Access-Control-Allow-Origin`, preflight from any other origin omits it.
+  - Bugs found and fixed: `MapPlatformEndpoints` required `AddHealthChecks()` (added); the security-headers middleware was not in the pipeline until we replaced `UsePlatformCorrelation` with the bundled `UsePlatformWeb` (correlation + security headers + request limits + timeout).
 
 ## Next change
 
-`platform-web-edge` is the only active change to implement in the next cycle. Do not interleave other changes.
+`platform-storage-abstraction` is the only active change to implement in the next cycle. Do not interleave other changes.
