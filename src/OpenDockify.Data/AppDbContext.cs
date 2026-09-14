@@ -47,6 +47,18 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     public DbSet<OpenDockify.Integrations.Models.WebhookDelivery> WebhookDeliveries => Set<OpenDockify.Integrations.Models.WebhookDelivery>();
 
+    public DbSet<OpenDockify.Auth.Models.RefreshToken> RefreshTokens => Set<OpenDockify.Auth.Models.RefreshToken>();
+
+    public DbSet<OpenDockify.Auth.Models.RecoveryToken> RecoveryTokens => Set<OpenDockify.Auth.Models.RecoveryToken>();
+
+    public DbSet<OpenDockify.Auth.Models.TwoFactorSecret> TwoFactorSecrets => Set<OpenDockify.Auth.Models.TwoFactorSecret>();
+
+    public DbSet<OpenDockify.Auth.Models.TwoFactorChallenge> TwoFactorChallenges => Set<OpenDockify.Auth.Models.TwoFactorChallenge>();
+
+    public DbSet<OpenDockify.Auth.Models.LoginAttempt> LoginAttempts => Set<OpenDockify.Auth.Models.LoginAttempt>();
+
+    public DbSet<OpenDockify.Auth.Models.IdentityAuditEvent> IdentityAuditEvents => Set<OpenDockify.Auth.Models.IdentityAuditEvent>();
+
 
 
 

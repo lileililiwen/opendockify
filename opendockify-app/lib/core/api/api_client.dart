@@ -11,10 +11,12 @@ import '../models/interview.dart';
 import '../models/template_dto.dart';
 import 'api_error.dart';
 
-/// Holds the current in-memory JWT. The session controller sets/clears it;
-/// the [AuthInterceptor] injects it into every request.
+/// Holds the current in-memory JWT and refresh handle. The session
+/// controller sets/clears them; the [AuthInterceptor] injects the JWT into
+/// every request.
 class TokenProvider {
   String? token;
+  String? refreshToken;
 }
 
 class AuthInterceptor extends Interceptor {
@@ -33,13 +35,15 @@ class AuthInterceptor extends Interceptor {
 }
 
 /// Single typed client for the OpenDockify REST API. Every method normalizes
-/// failures into [ApiError]. On a 401 it invokes [onUnauthorized] so the
-/// session layer can clear the session and route to login.
+/// failures into [ApiError]. On a 401 the client first tries one silent
+/// refresh via [onRefreshNeeded]; only when that fails does it invoke
+/// [onUnauthorized] so the session layer can clear the session.
 class ApiClient {
   ApiClient({
     required String baseUrl,
     required TokenProvider tokens,
     this.onUnauthorized,
+    this.onRefreshNeeded,
     HttpClientAdapter? httpAdapter,
   })
     // ignore: prefer_initializing_formals
@@ -61,6 +65,10 @@ class ApiClient {
 
   final TokenProvider _tokens;
   void Function()? onUnauthorized;
+
+  /// Silent-refresh hook installed by the session layer. Returns true when a
+  /// new access token was installed and the failed request may be retried.
+  Future<bool> Function()? onRefreshNeeded;
   late final Dio _dio;
 
   String get baseUrl => _dio.options.baseUrl;
@@ -96,6 +104,7 @@ class ApiClient {
         '/api/auth/login',
         data: {'username': username, 'password': password},
       ),
+      retryable: false,
     );
     return AuthResponse.fromJson(_asMap(data));
   }
@@ -114,6 +123,7 @@ class ApiClient {
           'displayName': displayName,
         },
       ),
+      retryable: false,
     );
     return AuthResponse.fromJson(_asMap(data));
   }
@@ -121,6 +131,68 @@ class ApiClient {
   Future<UserProfile> me() async {
     final data = await _guard(() => _dio.get('/api/auth/me'));
     return UserProfile.fromJson(_asMap(data));
+  }
+
+  /// Rotates the refresh handle. Never retried: a 401 here means the family
+  /// was revoked and the session must be cleared.
+  Future<AuthResponse> refresh(String refreshToken) async {
+    final data = await _guard(
+      () => _dio.post('/api/auth/refresh', data: {'refreshToken': refreshToken}),
+      retryable: false,
+    );
+    return AuthResponse.fromJson(_asMap(data));
+  }
+
+  /// Revokes the refresh family server-side. Best-effort: failures are
+  /// swallowed so local sign-out always succeeds.
+  Future<void> logout(String? refreshToken) async {
+    if (refreshToken == null || refreshToken.isEmpty) return;
+    try {
+      await _guard(
+        () => _dio.post('/api/auth/logout', data: {'refreshToken': refreshToken}),
+        retryable: false,
+      );
+    } on ApiError {
+      // Local sign-out proceeds regardless.
+    }
+  }
+
+  Future<void> changePassword(String currentPassword, String newPassword) async {
+    await _guard(
+      () => _dio.post(
+        '/api/auth/change-password',
+        data: {'currentPassword': currentPassword, 'newPassword': newPassword},
+      ),
+    );
+  }
+
+  /// Starts account recovery. Always succeeds (202) to avoid user enumeration.
+  Future<void> recoveryStart(String username) async {
+    await _guard(
+      () => _dio.post('/api/auth/recovery/start', data: {'username': username}),
+      retryable: false,
+    );
+  }
+
+  Future<void> recoveryComplete(String challengeId, String code, String newPassword) async {
+    await _guard(
+      () => _dio.post(
+        '/api/auth/recovery/complete',
+        data: {'challengeId': challengeId, 'code': code, 'newPassword': newPassword},
+      ),
+      retryable: false,
+    );
+  }
+
+  Future<AuthResponse> twoFactorVerify(String challengeId, String code) async {
+    final data = await _guard(
+      () => _dio.post(
+        '/api/auth/2fa/verify',
+        data: {'challengeId': challengeId, 'code': code},
+      ),
+      retryable: false,
+    );
+    return AuthResponse.fromJson(_asMap(data));
   }
 
   // ---- Templates ----
@@ -565,11 +637,25 @@ class ApiClient {
 
   // ---- Helpers ----
 
-  Future<dynamic> _guard(Future<Response<dynamic>> Function() run) async {
+  Future<dynamic> _guard(
+    Future<Response<dynamic>> Function() run, {
+    bool retryable = true,
+  }) async {
     try {
       final res = await run();
       return res.data;
     } on DioException catch (e) {
+      if (e.response?.statusCode == 401 && retryable && onRefreshNeeded != null) {
+        final refreshed = await onRefreshNeeded!();
+        if (refreshed) {
+          try {
+            final res = await run();
+            return res.data;
+          } on DioException catch (retryError) {
+            throw _mapError(retryError);
+          }
+        }
+      }
       throw _mapError(e);
     }
   }

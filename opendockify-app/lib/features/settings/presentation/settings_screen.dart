@@ -41,6 +41,11 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => context.push('/integrations'),
           ),
           ListTile(
+            leading: const Icon(Icons.password_outlined),
+            title: const Text('Change password'),
+            onTap: () => context.push('/change-password'),
+          ),
+          ListTile(
             leading: const Icon(Icons.info_outline),
             title: const Text('About & Legal'),
             onTap: () => _showAbout(context),

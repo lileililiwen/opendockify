@@ -45,6 +45,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (next.status == SessionStatus.authenticated && prev?.status != SessionStatus.authenticated) {
         context.go('/templates');
       }
+      if (next.needsTwoFactor && prev?.needsTwoFactor != true) {
+        context.push('/2fa-verify');
+      }
       if (next.notice != null && next.notice!.isNotEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(next.notice!)));
         ref.read(sessionControllerProvider.notifier).clearNotice();
@@ -92,6 +95,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               TextButton(
                 onPressed: _busy ? null : () => context.push('/register'),
                 child: const Text('Create an account'),
+              ),
+              TextButton(
+                onPressed: _busy ? null : () => context.push('/recovery'),
+                child: const Text('Forgot password?'),
               ),
               const SizedBox(height: 24),
               Text(

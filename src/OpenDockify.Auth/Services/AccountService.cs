@@ -89,8 +89,42 @@ public sealed class AccountService
             return null;
         }
 
+        if (user.IsDisabled)
+        {
+            return null;
+        }
+
         var result = _passwordHasher.VerifyHashedPassword(null!, user.PasswordHash, password);
         return result == PasswordVerificationResult.Success ? user : null;
+    }
+
+    /// <summary>
+    /// Sets a new password for the user. The caller is responsible for
+    /// revoking all refresh-token families for the user after this returns.
+    /// </summary>
+    public async Task<RegisterResult> SetPasswordAsync(
+        User user,
+        string newPassword,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(newPassword) || newPassword.Length < 8)
+        {
+            return RegisterResult.ValidationError("Password must be at least 8 characters.");
+        }
+
+        user.PasswordHash = _passwordHasher.HashPassword(user, newPassword);
+        await _db.SaveChangesAsync(cancellationToken);
+        return RegisterResult.Success(user);
+    }
+
+    public async Task<bool> VerifyCurrentPasswordAsync(
+        User user,
+        string currentPassword,
+        CancellationToken cancellationToken)
+    {
+        await Task.CompletedTask;
+        var result = _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, currentPassword);
+        return result == PasswordVerificationResult.Success;
     }
 
     /// <summary>

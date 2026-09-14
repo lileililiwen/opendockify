@@ -1,16 +1,38 @@
 class AuthResponse {
-  const AuthResponse({required this.id, required this.username, required this.role, required this.token});
+  const AuthResponse({
+    required this.id,
+    required this.username,
+    required this.role,
+    required this.token,
+    this.refreshToken,
+    this.mode,
+    this.challengeId,
+  });
 
   final String id;
   final String username;
   final String role;
   final String token;
 
+  /// Opaque refresh handle (login / refresh / 2FA-verify responses).
+  final String? refreshToken;
+
+  /// Login mode: `authenticated` or `2fa-required`.
+  final String? mode;
+
+  /// 2FA challenge id when [mode] is `2fa-required`.
+  final String? challengeId;
+
+  bool get requiresTwoFactor => mode == '2fa-required';
+
   factory AuthResponse.fromJson(Map<String, dynamic> json) => AuthResponse(
-        id: json['id']?.toString() ?? '',
+        id: json['id']?.toString() ?? json['userId']?.toString() ?? '',
         username: json['username']?.toString() ?? '',
         role: json['role']?.toString() ?? '',
         token: json['token']?.toString() ?? '',
+        refreshToken: json['refreshToken']?.toString(),
+        mode: json['mode']?.toString(),
+        challengeId: json['challengeId']?.toString(),
       );
 }
 

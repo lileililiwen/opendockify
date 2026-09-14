@@ -10,10 +10,13 @@ import '../../features/admin/presentation/template_package_import_screen.dart';
 import '../../features/admin/presentation/ai_usage_screen.dart';
 import '../../features/integrations/presentation/integrations_screen.dart';
 import '../../features/auth/application/session_controller.dart';
+import '../../features/auth/presentation/change_password_screen.dart';
 import '../../features/auth/presentation/connection_screen.dart';
 import '../../features/auth/presentation/login_screen.dart';
+import '../../features/auth/presentation/recovery_screen.dart';
 import '../../features/auth/presentation/register_screen.dart';
 import '../../features/auth/presentation/splash_screen.dart';
+import '../../features/auth/presentation/two_factor_verify_screen.dart';
 import '../../features/documents/presentation/document_detail_screen.dart';
 import '../../features/documents/presentation/document_fill_screen.dart';
 import '../../features/documents/presentation/documents_screen.dart';
@@ -45,7 +48,10 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       final onSplash = location == '/splash';
       final onConnect = location == '/connect';
-      final onAuth = location == '/login' || location == '/register';
+      final onAuth = location == '/login' ||
+          location == '/register' ||
+          location == '/recovery' ||
+          location == '/2fa-verify';
 
       // Let the splash screen finish bootstrapping before redirecting.
       if (onSplash && (connection.isLoading || session.status == SessionStatus.unknown)) {
@@ -81,6 +87,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/connect', builder: (context, state) => const ConnectionScreen()),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       GoRoute(path: '/register', builder: (context, state) => const RegisterScreen()),
+      GoRoute(path: '/recovery', builder: (context, state) => const RecoveryScreen()),
+      GoRoute(path: '/2fa-verify', builder: (context, state) => const TwoFactorVerifyScreen()),
+      GoRoute(path: '/change-password', builder: (context, state) => const ChangePasswordScreen()),
       GoRoute(path: '/templates', builder: (context, state) => const MarketplaceScreen()),
       GoRoute(path: '/templates/new', builder: (context, state) => const TemplateEditorScreen()),
       GoRoute(path: '/templates/:id', builder: (context, state) => TemplateDetailScreen(templateId: state.pathParameters['id']!)),

@@ -9,6 +9,7 @@ import 'package:opendockify_app/features/auth/application/session_controller.dar
 
 class FakeTokenStore implements TokenStore {
   String? stored;
+  String? storedRefresh;
 
   @override
   Future<String?> read() async => stored;
@@ -17,15 +18,28 @@ class FakeTokenStore implements TokenStore {
   Future<void> write(String token) async => stored = token;
 
   @override
-  Future<void> clear() async => stored = null;
+  Future<String?> readRefresh() async => storedRefresh;
+
+  @override
+  Future<void> writeRefresh(String refreshToken) async => storedRefresh = refreshToken;
+
+  @override
+  Future<void> clear() async {
+    stored = null;
+    storedRefresh = null;
+  }
 }
 
 class FakeApiClient extends ApiClient {
   FakeApiClient({super.baseUrl = 'http://test', required super.tokens});
 
   bool failLogin = false;
+  bool failRefresh = false;
+  bool twoFactorRequired = false;
   String? lastLoginUser;
   String? lastLoginPassword;
+  String? lastRefreshHandle;
+  String? lastLogoutHandle;
   AuthResponse? registerResponse;
 
   @override
@@ -35,7 +49,57 @@ class FakeApiClient extends ApiClient {
     if (failLogin) {
       throw const ApiError(ApiErrorKind.validation, 'Invalid credentials.');
     }
-    return AuthResponse(id: 'u1', username: username, role: 'User', token: 'jwt');
+    if (twoFactorRequired) {
+      return const AuthResponse(
+        id: 'u1',
+        username: 'alice',
+        role: 'User',
+        token: '',
+        mode: '2fa-required',
+        challengeId: 'challenge-1',
+      );
+    }
+    return const AuthResponse(
+      id: 'u1',
+      username: 'alice',
+      role: 'User',
+      token: 'jwt',
+      refreshToken: 'refresh-1',
+    );
+  }
+
+  @override
+  Future<AuthResponse> refresh(String refreshToken) async {
+    lastRefreshHandle = refreshToken;
+    if (failRefresh) {
+      throw const ApiError(ApiErrorKind.unauthorized, 'Refresh token rejected.');
+    }
+    return const AuthResponse(
+      id: 'u1',
+      username: 'alice',
+      role: 'User',
+      token: 'jwt-2',
+      refreshToken: 'refresh-2',
+    );
+  }
+
+  @override
+  Future<void> logout(String? refreshToken) async {
+    lastLogoutHandle = refreshToken;
+  }
+
+  @override
+  Future<AuthResponse> twoFactorVerify(String challengeId, String code) async {
+    if (code != '123456') {
+      throw const ApiError(ApiErrorKind.unauthorized, 'Two-factor verification failed.');
+    }
+    return const AuthResponse(
+      id: 'u1',
+      username: 'alice',
+      role: 'User',
+      token: 'jwt',
+      refreshToken: 'refresh-1',
+    );
   }
 
   @override
@@ -128,6 +192,66 @@ void main() {
       await controller.logout();
       expect(store.stored, isNull);
       expect(container.read(tokenProvider).token, isNull);
+      expect(container.read(sessionControllerProvider).isAuthenticated, isFalse);
+    });
+
+    test('login persists the refresh handle', () async {
+      final controller = container.read(sessionControllerProvider.notifier);
+      await controller.login('alice', 'pw');
+      expect(store.storedRefresh, 'refresh-1');
+      expect(container.read(tokenProvider).refreshToken, 'refresh-1');
+    });
+
+    test('logout revokes the refresh handle server-side', () async {
+      final controller = container.read(sessionControllerProvider.notifier);
+      await controller.login('alice', 'pw');
+      await controller.logout();
+      expect(client.lastLogoutHandle, 'refresh-1');
+      expect(store.storedRefresh, isNull);
+    });
+
+    test('attemptRefresh rotates tokens', () async {
+      final controller = container.read(sessionControllerProvider.notifier);
+      await controller.login('alice', 'pw');
+      final ok = await controller.attemptRefresh();
+      expect(ok, isTrue);
+      expect(client.lastRefreshHandle, 'refresh-1');
+      expect(store.stored, 'jwt-2');
+      expect(store.storedRefresh, 'refresh-2');
+    });
+
+    test('attemptRefresh without a handle returns false', () async {
+      final controller = container.read(sessionControllerProvider.notifier);
+      expect(await controller.attemptRefresh(), isFalse);
+      expect(client.lastRefreshHandle, isNull);
+    });
+
+    test('login with 2FA required parks a pending challenge', () async {
+      client.twoFactorRequired = true;
+      final controller = container.read(sessionControllerProvider.notifier);
+      final error = await controller.login('alice', 'pw');
+      expect(error, isNull);
+      final session = container.read(sessionControllerProvider);
+      expect(session.isAuthenticated, isFalse);
+      expect(session.needsTwoFactor, isTrue);
+      expect(session.pendingChallengeId, 'challenge-1');
+    });
+
+    test('verifyTwoFactor completes sign-in', () async {
+      client.twoFactorRequired = true;
+      final controller = container.read(sessionControllerProvider.notifier);
+      await controller.login('alice', 'pw');
+      final error = await controller.verifyTwoFactor('123456');
+      expect(error, isNull);
+      expect(container.read(sessionControllerProvider).isAuthenticated, isTrue);
+    });
+
+    test('verifyTwoFactor surfaces a bad code', () async {
+      client.twoFactorRequired = true;
+      final controller = container.read(sessionControllerProvider.notifier);
+      await controller.login('alice', 'pw');
+      final error = await controller.verifyTwoFactor('000000');
+      expect(error, isNotEmpty);
       expect(container.read(sessionControllerProvider).isAuthenticated, isFalse);
     });
   });

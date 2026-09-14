@@ -15,8 +15,11 @@ public sealed class JwtTokenServiceTests
             ["Jwt:Issuer"] = "test",
             ["Jwt:Audience"] = "test",
             ["Jwt:Secret"] = secret ?? "test-secret-that-is-at-least-thirty-two-bytes-long",
-            ["Jwt:ExpiryMinutes"] = expiry ?? "480",
         };
+        if (expiry is not null)
+        {
+            values["Jwt:ExpiryMinutes"] = expiry;
+        }
         return new ConfigurationBuilder().AddInMemoryCollection(values).Build();
     }
 
@@ -46,6 +49,19 @@ public sealed class JwtTokenServiceTests
 
         Assert.True(jwt.ValidTo > DateTime.UtcNow.AddSeconds(30));
         Assert.True(jwt.ValidTo < DateTime.UtcNow.AddMinutes(5));
+    }
+
+    [Fact]
+    public void IssueToken_defaults_to_15_minutes()
+    {
+        var service = new JwtTokenService(Config(expiry: null));
+        var token = service.IssueToken(Guid.NewGuid(), "Regular");
+
+        var handler = new JwtSecurityTokenHandler();
+        var jwt = handler.ReadJwtToken(token);
+
+        Assert.True(jwt.ValidTo > DateTime.UtcNow.AddMinutes(10));
+        Assert.True(jwt.ValidTo < DateTime.UtcNow.AddMinutes(20));
     }
 
     [Fact]

@@ -34,4 +34,8 @@
     </PackageReference>
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\dotnet-platform-libs\src\Platform.Identity.AspNetCore\Platform.Identity.AspNetCore.csproj" />
+  </ItemGroup>
+
 </Project>

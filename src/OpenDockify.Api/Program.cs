@@ -19,6 +19,7 @@ using OpenDockify.Rendering;
 using OpenDockify.Sharing;
 using OpenDockify.SystemConfig;
 using OpenDockify.Templates;
+using Platform.Identity.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -48,6 +49,10 @@ builder.Services.AddIntegrationsModule(builder.Configuration);
 builder.Services.AddAiAssistModule();
 builder.Services.AddEsignModule();
 
+// Platform identity-lifecycle composition: wires the registered refresh /
+// recovery / 2FA stores into the platform coordinator.
+builder.Services.AddPlatformIdentityLifecycle();
+
 // JWT bearer auth: validate issuer/audience/lifetime and the HMAC signature
 // using Jwt:Secret. Startup validation of the secret lives in
 // JwtTokenService (Auth module).
@@ -76,6 +81,7 @@ builder.Services.AddAuthorization(options =>
 
 var loginAttemptsPerMinute = AuthSecurityOptions.GetLoginAttemptsPerMinute(builder.Configuration);
 var registrationAttemptsPerHour = AuthSecurityOptions.GetRegistrationAttemptsPerHour(builder.Configuration);
+var recoveryAttemptsPerHour = AuthSecurityOptions.GetRecoveryAttemptsPerHour(builder.Configuration);
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -114,6 +120,16 @@ builder.Services.AddRateLimiter(options =>
                     QueueLimit = 0,
                     AutoReplenishment = true,
                 }));
+    options.AddPolicy(AuthSecurityOptions.RecoveryPolicyName, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = recoveryAttemptsPerHour,
+                Window = TimeSpan.FromHours(1),
+                QueueLimit = 0,
+                AutoReplenishment = true,
+            }));
     options.AddPolicy("public-shares", httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",

@@ -24,4 +24,11 @@ public sealed class User
     public UserRole Role { get; set; } = UserRole.Regular;
 
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>
+    /// When <c>true</c>, login and refresh attempts are denied. Existing access
+    /// JWTs continue to work until their 15-minute expiry. Set by an
+    /// administrator via <c>POST /api/admin/users/{id}/disable</c>.
+    /// </summary>
+    public bool IsDisabled { get; set; }
 }

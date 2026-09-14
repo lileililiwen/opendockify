@@ -62,8 +62,10 @@ public static class AuthSecurityOptions
 {
     public const string LoginPolicyName = "auth-login";
     public const string RegistrationPolicyName = "auth-registration";
+    public const string RecoveryPolicyName = "auth-recovery";
     public const int DefaultLoginAttemptsPerMinute = 10;
     public const int DefaultRegistrationAttemptsPerHour = 5;
+    public const int DefaultRecoveryAttemptsPerHour = 3;
     private const int _maxAttempts = 10_000;
 
     public static bool IsRegistrationAllowed(IConfiguration configuration)
@@ -79,6 +81,11 @@ public static class AuthSecurityOptions
     public static int GetRegistrationAttemptsPerHour(IConfiguration configuration)
     {
         return GetPositiveBoundedInt(configuration["Auth:RegistrationAttemptsPerHour"], DefaultRegistrationAttemptsPerHour);
+    }
+
+    public static int GetRecoveryAttemptsPerHour(IConfiguration configuration)
+    {
+        return GetPositiveBoundedInt(configuration["Auth:RecoveryAttemptsPerHour"], DefaultRecoveryAttemptsPerHour);
     }
 
     private static int GetPositiveBoundedInt(string? raw, int fallback)

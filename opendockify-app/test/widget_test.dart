@@ -17,6 +17,12 @@ class FakeTokenStore implements TokenStore {
   Future<void> write(String token) async {}
 
   @override
+  Future<String?> readRefresh() async => null;
+
+  @override
+  Future<void> writeRefresh(String refreshToken) async {}
+
+  @override
   Future<void> clear() async {}
 }
 

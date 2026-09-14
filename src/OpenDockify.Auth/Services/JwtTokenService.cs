@@ -56,8 +56,10 @@ public sealed class JwtTokenService
     {
         return int.TryParse(_configuration["Jwt:ExpiryMinutes"], out var minutes)
             ? minutes
-            : 480;
+            : DefaultExpiryMinutes;
     }
+
+    public const int DefaultExpiryMinutes = 15;
 
     private void ValidateConfig()
     {
