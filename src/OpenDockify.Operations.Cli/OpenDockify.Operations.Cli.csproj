@@ -9,4 +9,9 @@
     <ProjectReference Include="..\OpenDockify.Data\OpenDockify.Data.csproj" />
     <ProjectReference Include="..\OpenDockify.Operations\OpenDockify.Operations.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Platform.Persistence.EfCore.Migrator" Version="0.1.0" />
+    <PackageReference Include="Platform.Storage" Version="0.1.0" />
+    <PackageReference Include="Platform.Storage.Local" Version="0.1.0" />
+  </ItemGroup>
 </Project>

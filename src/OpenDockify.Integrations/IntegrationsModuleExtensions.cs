@@ -5,6 +5,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using OpenDockify.Integrations.Configuration;
 using OpenDockify.Integrations.Services;
+using Platform.Jobs;
+using Platform.Jobs.DependencyInjection;
 
 namespace OpenDockify.Integrations;
 
@@ -27,7 +29,9 @@ public static class IntegrationsModuleExtensions
         });
         services.AddSingleton<IWebhookSender, SsrfWebhookSender>();
         services.AddScoped<WebhookDeliveryService>();
-        services.AddHostedService<WebhookDeliveryWorker>();
+
+        services.AddPlatformJobs();
+        services.AddScoped<WebhookDeliveryJobHandler>();
 
         // Service-token authentication for /api/v1/automation; JWT bearer
         // remains the default scheme for all other endpoints.
@@ -36,6 +40,13 @@ public static class IntegrationsModuleExtensions
         services.AddAuthorization(options => AutomationAuthorization.AddPolicies(options));
         services.AddSingleton<IAuthorizationHandler, AutomationScopeHandler>();
 
+        return services;
+    }
+
+    public static IServiceProvider RegisterIntegrationRecurringJobs(this IServiceProvider services)
+    {
+        var registry = services.GetRequiredService<IRecurringJobRegistry>();
+        registry.Register(Platform.Jobs.RecurringJobAttribute.GetDescriptor(typeof(WebhookDeliveryJobHandler)));
         return services;
     }
 }

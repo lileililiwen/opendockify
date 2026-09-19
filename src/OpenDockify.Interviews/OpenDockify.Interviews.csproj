@@ -9,5 +9,6 @@
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="8.0.*" />
     <ProjectReference Include="../OpenDockify.Generation/OpenDockify.Generation.csproj" />
     <ProjectReference Include="../OpenDockify.Templates/OpenDockify.Templates.csproj" />
+    <PackageReference Include="Platform.Jobs" Version="0.1.0" />
   </ItemGroup>
 </Project>

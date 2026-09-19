@@ -3,6 +3,7 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using OpenDockify.AiAssist;
@@ -10,6 +11,7 @@ using OpenDockify.Api;
 using OpenDockify.Auth;
 using OpenDockify.Auth.Services;
 using OpenDockify.Data;
+using OpenDockify.Data.Audit;
 using OpenDockify.Esign;
 using OpenDockify.Finance;
 using OpenDockify.Generation;
@@ -23,7 +25,11 @@ using OpenDockify.SystemConfig;
 using OpenDockify.Templates;
 using Platform.AspNetCore.DependencyInjection;
 using Platform.AspNetCore.Errors;
+using Platform.Auditing.AspNetCore.DependencyInjection;
 using Platform.Identity.AspNetCore;
+using Platform.Jobs.Hangfire;
+using Platform.Jobs.Hangfire.DependencyInjection;
+using Platform.Observability.DependencyInjection;
 using Platform.Web;
 using Platform.Web.Cors;
 using Platform.Web.Cors.DependencyInjection;
@@ -38,9 +44,6 @@ using Platform.Web.Versioning.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Fail before migrations or HTTP startup when a production deployment still
-// has missing or development-only security credentials, identical secrets, or
-// a remote HTTP AI endpoint that bypasses the HTTPS-only posture.
 SecurityBootstrapValidator.EnsureValid(
     builder.Configuration,
     builder.Environment.EnvironmentName);
@@ -48,10 +51,10 @@ WebEdgeBootstrapValidator.EnsureValid(
     builder.Configuration,
     builder.Environment.EnvironmentName);
 
-// Minimal API shell + composition root. Domain modules register here as
-// their changes land; the Data module provides the pluggable database
-// foundation (SQLite default; Postgres/MySQL/SQL Server by config).
 builder.Services.AddDatabaseModule(builder.Configuration);
+builder.Services.AddPlatformMigrator();
+builder.Services.AddAuditModule(builder.Configuration);
+builder.Services.AddSeed<AuditRetentionJobHandlerSeed>();
 builder.Services.AddAuthModule();
 builder.Services.AddSeed<AdminSeeder>();
 builder.Services.AddSystemConfigModule();
@@ -69,19 +72,11 @@ builder.Services.AddAiAssistModule();
 builder.Services.AddEsignModule();
 builder.Services.AddStorageModule(builder.Configuration);
 
-// Platform identity-lifecycle composition: wires the registered refresh /
-// recovery / 2FA stores into the platform coordinator.
 builder.Services.AddPlatformIdentityLifecycle();
 
-// Apply bounded retry/timeout/circuit-breaker to the AI assist client. The
-// platform owns the policy; the AI module just declares the client name.
 builder.Services.AddHttpClient(OpenDockify.AiAssist.AiAssistClientNames.HttpClient)
     .AddPlatformHttpResilience();
 
-// Platform edge pipeline: correlation, problem-details, CORS deny-default,
-// HTTP resilience handler, API versioning, OpenAPI document registry, and
-// redaction-safe telemetry names. Services are registered here; the matching
-// middleware runs further below in the documented order.
 builder.Services.AddPlatformWeb(web =>
 {
     web.EnableSecurityHeaders = true;
@@ -125,14 +120,33 @@ builder.Services.AddPlatformOpenApiDocument(new PlatformWebOpenApiDocumentOption
     OpenApiVersion = "3.0.3",
 });
 
-// The platform /health endpoint requires a health-checks registration even
-// when the deployer does not want readiness probes. Add a single empty
-// registration so MapPlatformEndpoints can map the route.
-builder.Services.AddHealthChecks();
+builder.Services.AddPlatformObservability(o =>
+{
+    o.ApplicationName = "OpenDockify";
+});
 
-// Forwarded headers (X-Forwarded-For/Proto) so IP rate limits work behind a
-// trusted reverse proxy. Defaults to loopback only; production deployers
-// must explicitly list trusted proxies/networks.
+builder.Services.AddPlatformAuditingAspNetCore(options =>
+{
+    options.Enabled = true;
+});
+
+builder.Services.AddPlatformHangfireJobs(o =>
+{
+    o.Storage = HangfireStorageResolver.Resolve(builder.Configuration);
+    if (o.Storage == HangfireStorageKind.PostgreSql)
+    {
+        o.PostgreSqlConnectionString = builder.Configuration.GetConnectionString("Hangfire")
+            ?? builder.Configuration["BackgroundJobs:Hangfire:PostgreSqlConnectionString"]
+            ?? builder.Configuration["Jobs:Hangfire:PostgreSqlConnectionString"];
+    }
+    o.DashboardEnabled = false;
+    o.DashboardRoute = "/admin/jobs";
+});
+
+builder.Services.AddHealthChecks()
+    .AddCheck<DatabaseHealthCheck>("database", tags: ProgramTags.Ready)
+    .AddCheck<StorageHealthCheck>("storage", tags: ProgramTags.Ready);
+
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
@@ -140,9 +154,6 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
         options, builder.Configuration, builder.Environment.EnvironmentName);
 });
 
-// JWT bearer auth: validate issuer/audience/lifetime and the HMAC signature
-// using Jwt:Secret. Startup validation of the secret lives in
-// JwtTokenService (Auth module).
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -200,13 +211,13 @@ builder.Services.AddRateLimiter(options =>
     options.AddPolicy(AuthSecurityOptions.RegistrationPolicyName, httpContext =>
             RateLimitPartition.GetFixedWindowLimiter(
                 WebEdgeBootstrapResolver.ClientPartitionKey(httpContext),
-                _ => new FixedWindowRateLimiterOptions
-                {
-                    PermitLimit = registrationAttemptsPerHour,
-                    Window = TimeSpan.FromHours(1),
-                    QueueLimit = 0,
-                    AutoReplenishment = true,
-                }));
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = registrationAttemptsPerHour,
+                Window = TimeSpan.FromHours(1),
+                QueueLimit = 0,
+                AutoReplenishment = true,
+            }));
     options.AddPolicy(AuthSecurityOptions.RecoveryPolicyName, httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             WebEdgeBootstrapResolver.ClientPartitionKey(httpContext),
@@ -227,7 +238,6 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0,
                 AutoReplenishment = true,
             }));
-    // Automation API: bounded per token (falls back to client IP pre-auth).
     options.AddPolicy(AutomationEndpoints.RateLimitPolicy, httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             httpContext.User.FindFirst("token_id")?.Value
@@ -243,14 +253,9 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
-// Health endpoints used by the Docker healthcheck and orchestration probes.
-// The hand-rolled /healthz shape is what the Flutter client calls; the
-// platform /health endpoint is mapped further down alongside OpenAPI.
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
+app.MapReadinessEndpoints();
 
-// Forwarded headers must run before any IP-based logic (rate limits, audit
-// keys, lockout windows) so that deployers behind a reverse proxy see the
-// real client IP rather than the proxy address.
 app.UseForwardedHeaders();
 
 if (WebEdgeBootstrapValidator.IsHstsEnabled(builder.Configuration, builder.Environment.EnvironmentName))
@@ -258,19 +263,14 @@ if (WebEdgeBootstrapValidator.IsHstsEnabled(builder.Configuration, builder.Envir
     app.UseHsts();
 }
 
-// Correlation: read or generate X-Correlation-Id and echo it on the response.
-// Security headers: X-Content-Type-Options, X-Frame-Options, Referrer-Policy,
-// Content-Security-Policy: frame-ancestors 'none'. The platform runs
-// correlation first so error responses can carry the id.
 app.UsePlatformWeb();
 
-// Maintenance gate: must precede auth so anonymous callers see the same
-// 503 as authenticated ones during an outage.
 app.Use(async (context, next) =>
 {
     var maintenance = context.RequestServices.GetRequiredService<MaintenanceMode>();
     if (maintenance.IsEnabled
         && !context.Request.Path.StartsWithSegments("/healthz")
+        && !context.Request.Path.StartsWithSegments("/readyz")
         && !context.Request.Path.StartsWithSegments("/health")
         && !context.Request.Path.StartsWithSegments("/api/admin/operations"))
     {
@@ -282,20 +282,21 @@ app.Use(async (context, next) =>
     await next();
 });
 
-// CORS: must run after routing (minimal API inserts it automatically) and
-// before authentication so preflight requests do not trigger auth.
 app.UsePlatformWebCors(WebEdgePolicies.CorsPolicyName);
 
 app.UseRateLimiter();
+// Audit capture runs before authentication so denied statuses (401/403
+// from JWT validation) are recorded as security events; the middleware
+// records after the downstream pipeline completes.
+app.UsePlatformAuditing();
 app.UseAuthentication();
 app.UseAuthorization();
 
-// ProblemDetails: unhandled exceptions become a sanitized 500 with a stable
-// `code` extension; PlatformProblemException surfaces the supplied error.
 app.UsePlatformProblemDetails();
 
 app.MapAuthEndpoints();
 app.MapAdminEndpoints();
+app.MapAuditEndpoints();
 app.MapSystemConfigEndpoints();
 app.MapTemplateEndpoints();
 app.MapAdminTemplateEndpoints();
@@ -308,12 +309,77 @@ app.MapOperationsEndpoints();
 app.MapAutomationEndpoints();
 app.MapIntegrationManagementEndpoints();
 
-// Platform health + OpenAPI document endpoints.
 app.MapPlatformEndpoints();
 app.MapPlatformOpenApiDocuments();
 
-// Self-hosters should not need to run `dotnet ef` manually: apply migrations
-// and run idempotent seeders at startup.
+app.Services
+    .RegisterOperationsRecurringJobs(builder.Configuration)
+    .RegisterInterviewRecurringJobs()
+    .RegisterIntegrationRecurringJobs()
+    .RegisterDataRetentionRecurringJob();
+
 await app.Services.MigrateAndSeedAsync(app.Lifetime.ApplicationStopping);
 
 await app.RunAsync();
+
+namespace OpenDockify.Api
+{
+    public sealed partial class Program;
+
+    /// <summary>
+    /// Resolves the Hangfire storage backend from configuration. Reads
+    /// <c>Jobs:Hangfire:Storage</c> first (the OpenSpec-documented key),
+    /// then the platform-default <c>BackgroundJobs:Hangfire:Storage</c>.
+    /// Anything unrecognized falls back to InMemory (the self-hosted
+    /// default; Postgres is opt-in).
+    /// </summary>
+    internal static class HangfireStorageResolver
+    {
+        internal static HangfireStorageKind Resolve(IConfiguration configuration)
+        {
+            var raw = configuration["Jobs:Hangfire:Storage"]
+                ?? configuration["BackgroundJobs:Hangfire:Storage"];
+            return raw?.Trim().ToLowerInvariant() switch
+            {
+                "postgresql" or "postgres" or "npgsql" => HangfireStorageKind.PostgreSql,
+                _ => HangfireStorageKind.InMemory,
+            };
+        }
+    }
+
+    internal static class ProgramTags
+    {
+        public static readonly string[] Ready = { "ready" };
+    }
+
+    /// <summary>
+    /// Seeder wrapper that registers the audit-retention recurring job
+    /// after the platform-jobs registry is built. Wrapped as an
+    /// <see cref="OpenDockify.Data.IDbSeeder"/> so it runs in the existing
+    /// startup seeder pipeline.
+    /// </summary>
+    public sealed class AuditRetentionJobHandlerSeed : OpenDockify.Data.IDbSeeder
+    {
+        public int Order => 1000;
+
+        public Task SeedAsync(IServiceProvider services, CancellationToken cancellationToken)
+        {
+            var registry = services.GetRequiredService<Platform.Jobs.IRecurringJobRegistry>();
+            registry.Register(Platform.Jobs.RecurringJobAttribute.GetDescriptor(
+                typeof(AuditRetentionJobHandler)));
+            return Task.CompletedTask;
+        }
+    }
+
+    public static class DataRecurringJobRegistrationExtensions
+    {
+        public static IServiceProvider RegisterDataRetentionRecurringJob(this IServiceProvider services)
+        {
+            // The retention job is registered via the AuditRetentionJobHandlerSeed
+            // so it is part of the documented startup pipeline. This method is
+            // a no-op extension point kept for symmetry with the other modules.
+            return services;
+        }
+    }
+}
+

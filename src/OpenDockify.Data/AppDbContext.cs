@@ -59,6 +59,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     public DbSet<OpenDockify.Auth.Models.IdentityAuditEvent> IdentityAuditEvents => Set<OpenDockify.Auth.Models.IdentityAuditEvent>();
 
+    public DbSet<OpenDockify.Data.Models.AuditEvent> AuditEvents => Set<OpenDockify.Data.Models.AuditEvent>();
+
 
 
 
@@ -86,6 +88,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(OpenDockify.Esign.Models.Signer).Assembly);
         // Added by automation-api-webhooks.
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(OpenDockify.Integrations.Models.ServiceToken).Assembly);
+        // Added by observability-audit-jobs.
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(OpenDockify.Data.Models.AuditEvent).Assembly);
         base.OnModelCreating(modelBuilder);
     }
 }

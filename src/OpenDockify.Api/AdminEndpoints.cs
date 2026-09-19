@@ -72,25 +72,6 @@ public static class AdminEndpoints
             return Results.Ok(new { id, enabled = true });
         });
 
-        group.MapGet("/audit", async (
-            int? page,
-            int? pageSize,
-            string? search,
-            string? sortBy,
-            bool? descending,
-            AdminStore store,
-            CancellationToken ct) =>
-        {
-            var query = new AdminQuery(
-                Page: page ?? 1,
-                PageSize: pageSize ?? 25,
-                Search: search,
-                SortBy: sortBy,
-                Descending: descending ?? false);
-            var result = await store.GetAuditAsync(query, ct);
-            return Results.Ok(result);
-        });
-
         return endpoints;
     }
 }

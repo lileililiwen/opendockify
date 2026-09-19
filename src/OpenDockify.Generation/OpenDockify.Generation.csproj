@@ -21,7 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\dotnet-platform-libs\src\Platform.Storage\Platform.Storage.csproj" />
+    <PackageReference Include="Platform.Storage" Version="0.1.0" />
   </ItemGroup>
 
 </Project>

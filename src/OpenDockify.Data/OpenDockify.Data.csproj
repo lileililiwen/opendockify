@@ -13,9 +13,19 @@
     <ProjectReference Include="..\OpenDockify.AiAssist\OpenDockify.AiAssist.csproj" />
     <ProjectReference Include="..\OpenDockify.Esign\OpenDockify.Esign.csproj" />
     <ProjectReference Include="..\OpenDockify.SystemConfig\OpenDockify.SystemConfig.csproj" />
+    <PackageReference Include="Platform.Auditing.Contracts" Version="0.1.0" />
+    <PackageReference Include="Platform.Auditing.EfCore" Version="0.1.0" />
+    <PackageReference Include="Platform.Persistence.EfCore" Version="0.1.0" />
+    <PackageReference Include="Platform.Persistence.EfCore.Migrator" Version="0.1.0" />
+    <PackageReference Include="Platform.Jobs" Version="0.1.0" />
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="9.0.3" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.3" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.3" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.*" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="8.0.*" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.*">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>

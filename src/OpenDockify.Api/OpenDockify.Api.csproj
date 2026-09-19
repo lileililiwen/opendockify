@@ -35,23 +35,34 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\dotnet-platform-libs\src\Platform.Identity.AspNetCore\Platform.Identity.AspNetCore.csproj" />
-    <ProjectReference Include="..\..\..\dotnet-platform-libs\src\Platform.AspNetCore\Platform.AspNetCore.csproj" />
-    <ProjectReference Include="..\..\..\dotnet-platform-libs\src\Platform.Web\Platform.Web.csproj" />
-    <ProjectReference Include="..\..\..\dotnet-platform-libs\src\Platform.Web.Cors\Platform.Web.Cors.csproj" />
-    <ProjectReference Include="..\..\..\dotnet-platform-libs\src\Platform.Web.Resilience\Platform.Web.Resilience.csproj" />
-    <ProjectReference Include="..\..\..\dotnet-platform-libs\src\Platform.Web.Versioning\Platform.Web.Versioning.csproj" />
-    <ProjectReference Include="..\..\..\dotnet-platform-libs\src\Platform.Web.Telemetry\Platform.Web.Telemetry.csproj" />
-    <ProjectReference Include="..\..\..\dotnet-platform-libs\src\Platform.Web.OpenApi\Platform.Web.OpenApi.csproj" />
-    <ProjectReference Include="..\..\..\dotnet-platform-libs\src\Platform.Storage\Platform.Storage.csproj" />
-    <ProjectReference Include="..\..\..\dotnet-platform-libs\src\Platform.Storage.Local\Platform.Storage.Local.csproj" />
-    <ProjectReference Include="..\..\..\dotnet-platform-libs\src\Platform.Storage.S3\Platform.Storage.S3.csproj" />
+    <PackageReference Include="Platform.Identity.AspNetCore" Version="0.1.0" />
+    <PackageReference Include="Platform.AspNetCore" Version="0.1.0" />
+    <PackageReference Include="Platform.Web" Version="0.1.0" />
+    <PackageReference Include="Platform.Web.Cors" Version="0.1.0" />
+    <PackageReference Include="Platform.Web.Resilience" Version="0.1.0" />
+    <PackageReference Include="Platform.Web.Versioning" Version="0.1.0" />
+    <PackageReference Include="Platform.Web.Telemetry" Version="0.1.0" />
+    <PackageReference Include="Platform.Web.OpenApi" Version="0.1.0" />
+    <PackageReference Include="Platform.Storage" Version="0.1.0" />
+    <PackageReference Include="Platform.Storage.Local" Version="0.1.0" />
+    <PackageReference Include="Platform.Storage.S3" Version="0.1.0" />
+    <PackageReference Include="Platform.Auditing.AspNetCore" Version="0.1.0" />
+    <PackageReference Include="Platform.Auditing.EfCore" Version="0.1.0" />
+    <PackageReference Include="Platform.Persistence.EfCore" Version="0.1.0" />
+    <PackageReference Include="Platform.Persistence.EfCore.Migrator" Version="0.1.0" />
+    <PackageReference Include="Platform.Jobs" Version="0.1.0" />
+    <PackageReference Include="Platform.Jobs.Hangfire" Version="0.1.0" />
+    <PackageReference Include="Platform.Observability" Version="0.1.0" />
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Hangfire.Core" Version="1.8.23" />
+    <PackageReference Include="Hangfire.NetCore" Version="1.8.23" />
+    <PackageReference Include="Hangfire.MemoryStorage" Version="1.8.1.2" />
     <PackageReference Include="Asp.Versioning.Http" Version="8.1.*" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.*" />
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="8.*" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 
 </Project>
