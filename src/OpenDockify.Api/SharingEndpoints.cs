@@ -14,21 +14,27 @@ public static class SharingEndpoints
             var items = await service.ListSharesAsync(UserId(http), documentId, ct);
             return items is null ? Results.NotFound(new { error = "Document not found." }) : Results.Ok(items);
         });
-        owner.MapPost("/grants", async (HttpContext http, Guid documentId, CreateGrantRequest request, DocumentSharingService service, CancellationToken ct) =>
+        owner.MapPost("/grants", async (HttpContext http, Guid documentId, CreateGrantRequest request, DocumentSharingService service, NotifyService notify, CancellationToken ct) =>
         {
             var result = await service.CreateGrantAsync(UserId(http), documentId, request.Username, request.AccessLevel, ct);
             if (result.NotFound)
                 return Results.NotFound(new { error = "Document not found." });
-            return result.Grant is null ? Results.BadRequest(new { error = result.Error }) : Results.Created($"/api/documents/{documentId}/shares", result.Grant);
+            if (result.Grant is null)
+                return Results.BadRequest(new { error = result.Error });
+            await notify.SendShareGrantedAsync(request.Username, documentId.ToString(), $"/api/documents/{documentId}/shares", ct);
+            return Results.Created($"/api/documents/{documentId}/shares", result.Grant);
         });
         owner.MapDelete("/grants/{grantId:guid}", async (HttpContext http, Guid documentId, Guid grantId, DocumentSharingService service, CancellationToken ct) =>
             ToOwnerResult(await service.RevokeGrantAsync(UserId(http), documentId, grantId, ct)));
-        owner.MapPost("/links", async (HttpContext http, Guid documentId, CreateLinkRequest request, DocumentSharingService service, CancellationToken ct) =>
+        owner.MapPost("/links", async (HttpContext http, Guid documentId, CreateLinkRequest request, DocumentSharingService service, NotifyService notify, CancellationToken ct) =>
         {
-            var result = await service.CreateLinkAsync(UserId(http), documentId, request.LifetimeHours, request.AllowDownload, ct);
+            var result = await service.CreateLinkAsync(UserId(http), documentId, request.LifetimeHours, request.AllowDownload, ct, request.Password);
             if (result.NotFound)
                 return Results.NotFound(new { error = "Document not found." });
-            return result.Link is null ? Results.BadRequest(new { error = result.Error }) : Results.Created($"/s/{result.Link.Token}", result.Link);
+            if (result.Link is null)
+                return Results.BadRequest(new { error = result.Error });
+            await notify.SendLinkExpiringAsync(UserId(http).ToString(), documentId.ToString(), result.Link.ExpiresAt, ct);
+            return Results.Created($"/s/{result.Link.Token}", result.Link);
         });
         owner.MapDelete("/links/{linkId:guid}", async (HttpContext http, Guid documentId, Guid linkId, DocumentSharingService service, CancellationToken ct) =>
             ToOwnerResult(await service.RevokeLinkAsync(UserId(http), documentId, linkId, ct)));
@@ -39,20 +45,29 @@ public static class SharingEndpoints
         });
 
         var external = endpoints.MapGroup("/s").RequireRateLimiting("public-shares");
-        external.MapGet("/{token}", async (HttpContext http, string token, DocumentSharingService service, CancellationToken ct) =>
+        external.MapGet("/{token}", async (HttpContext http, string token, string? password, DocumentSharingService service, CancellationToken ct) =>
         {
             DefensiveHeaders(http.Response);
-            var view = await service.ResolvePublicAsync(token, false, Client(http), ct);
+            var view = await service.ResolvePublicAsync(token, false, Client(http), ct, password ?? http.Request.Query["password"].ToString());
             if (view is null)
-                return PublicNotFound();
+                return PublicDenied();
             var downloadUrl = view.AllowDownload ? $"/s/{token}/download" : null;
             return Results.Ok(new { view.Title, view.TemplateName, view.RenderedText, view.CreatedAt, view.AllowDownload, downloadUrl });
         });
-        external.MapGet("/{token}/download", async (HttpContext http, string token, DocumentSharingService service, CancellationToken ct) =>
+        external.MapGet("/{token}/download", async (HttpContext http, string token, string? password, DocumentSharingService service, CancellationToken ct) =>
         {
             DefensiveHeaders(http.Response);
-            var view = await service.ResolvePublicAsync(token, true, Client(http), ct);
-            return view is null || !File.Exists(view.PdfPath) ? PublicNotFound() : Results.File(view.PdfPath, "application/pdf", "shared-document.pdf", enableRangeProcessing: false);
+            var view = await service.ResolvePublicAsync(token, true, Client(http), ct, password ?? http.Request.Query["password"].ToString());
+            return view is null || !File.Exists(view.PdfPath) ? PublicDenied() : Results.File(view.PdfPath, "application/pdf", "shared-document.pdf", enableRangeProcessing: false);
+        });
+        external.MapPost("/{token}", async (HttpContext http, string token, UnlockLinkRequest request, DocumentSharingService service, CancellationToken ct) =>
+        {
+            DefensiveHeaders(http.Response);
+            var view = await service.ResolvePublicAsync(token, false, Client(http), ct, request.Password);
+            if (view is null)
+                return PublicDenied();
+            var downloadUrl = view.AllowDownload ? $"/s/{token}/download" : null;
+            return Results.Ok(new { view.Title, view.TemplateName, view.RenderedText, view.CreatedAt, view.AllowDownload, downloadUrl });
         });
         return endpoints;
     }
@@ -63,9 +78,11 @@ public static class SharingEndpoints
             return Results.NotFound(new { error = "Share not found." });
         return result.Succeeded ? Results.NoContent() : Results.BadRequest(new { error = result.Error });
     }
-    private static IResult PublicNotFound()
+
+    private static IResult PublicDenied()
     {
-        return Results.NotFound(new { error = "Shared document not found." });
+        // Wrong passwords and locked links surface as 401 without revealing the hash.
+        return Results.Json(new { error = new { code = "unauthorized", message = "Shared document not found or link locked." } }, statusCode: 401);
     }
 
     private static Guid UserId(HttpContext http)
@@ -90,4 +107,5 @@ public static class SharingEndpoints
 }
 
 public sealed record CreateGrantRequest(string Username, string AccessLevel);
-public sealed record CreateLinkRequest(int LifetimeHours, bool AllowDownload);
+public sealed record CreateLinkRequest(int LifetimeHours, bool AllowDownload, string? Password);
+public sealed record UnlockLinkRequest(string? Password);

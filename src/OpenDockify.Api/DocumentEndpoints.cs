@@ -51,10 +51,23 @@ public static class DocumentEndpoints
             HttpContext http,
             GenerateDocumentRequest request,
             DocumentService documents,
+            NotifyRateGate gate,
+            NotifyService notify,
             CancellationToken ct) =>
         {
+            var rate = await gate.CheckRateAsync("generate", http, ct);
+            if (!rate.Allowed)
+                return NotifyRateGate.RateLimitedResult(rate);
+            var (quotaOk, quotaReject) = await gate.CheckDocumentQuotaAsync(http, ct);
+            if (!quotaOk)
+                return quotaReject!;
             var command = new GenerateCommand(request.TemplateId, request.Values, request.SelectedClauseIds);
             var result = await documents.GenerateAsync(CurrentUserId(http), command, ct);
+            if (result.ErrorKind == GenerationErrorKind.None && result.Document is not null)
+            {
+                await gate.ConsumeDocumentAsync(http, ct);
+                await notify.SendDocumentFinalizedAsync(CurrentUserId(http).ToString(), result.Document.Title, result.Document.Id, ct);
+            }
             return ToGenerateResult(result);
         });
 
@@ -62,10 +75,23 @@ public static class DocumentEndpoints
             HttpContext http,
             GenerateDocumentRequest request,
             DocumentService documents,
+            NotifyRateGate gate,
+            NotifyService notify,
             CancellationToken ct) =>
         {
+            var rate = await gate.CheckRateAsync("finalize", http, ct);
+            if (!rate.Allowed)
+                return NotifyRateGate.RateLimitedResult(rate);
+            var (quotaOk, quotaReject) = await gate.CheckDocumentQuotaAsync(http, ct);
+            if (!quotaOk)
+                return quotaReject!;
             var command = new GenerateCommand(request.TemplateId, request.Values, request.SelectedClauseIds);
             var result = await documents.GenerateAsync(CurrentUserId(http), command, ct);
+            if (result.ErrorKind == GenerationErrorKind.None && result.Document is not null)
+            {
+                await gate.ConsumeDocumentAsync(http, ct);
+                await notify.SendDocumentFinalizedAsync(CurrentUserId(http).ToString(), result.Document.Title, result.Document.Id, ct);
+            }
             return ToGenerateResult(result);
         });
 
@@ -73,8 +99,12 @@ public static class DocumentEndpoints
             HttpContext http,
             GenerateDocumentRequest request,
             DocumentService documents,
+            NotifyRateGate gate,
             CancellationToken ct) =>
         {
+            var rate = await gate.CheckRateAsync("preview", http, ct);
+            if (!rate.Allowed)
+                return NotifyRateGate.RateLimitedResult(rate);
             var command = new GenerateCommand(request.TemplateId, request.Values, request.SelectedClauseIds);
             var result = await documents.PreviewAsync(CurrentUserId(http), command, ct);
             return ToPreviewResult(result);

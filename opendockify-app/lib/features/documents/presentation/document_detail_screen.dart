@@ -290,6 +290,7 @@ class _DocumentDetailBody extends ConsumerWidget {
   Future<void> _createLink(BuildContext context, WidgetRef ref) async {
     var hours = 24;
     var download = false;
+    final password = TextEditingController();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -312,6 +313,13 @@ class _DocumentDetailBody extends ConsumerWidget {
                 onChanged: (value) => setState(() => download = value),
                 title: const Text('Allow PDF download'),
               ),
+              TextField(
+                controller: password,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'Link password (optional, 8+ chars)',
+                ),
+              ),
             ],
           ),
           actions: [
@@ -330,7 +338,13 @@ class _DocumentDetailBody extends ConsumerWidget {
     if (confirmed != true || !context.mounted) return;
     final link = await ref
         .read(apiClientProvider)
-        .createDocumentShareLink(document.id, hours, download);
+        .createDocumentShareLink(
+          document.id,
+          hours,
+          download,
+          password.text.trim().isEmpty ? null : password.text.trim(),
+        );
+    password.dispose();
     final url = ref.read(apiClientProvider).absoluteUrl('/s/${link.token}');
     if (!context.mounted) return;
     await showDialog<void>(

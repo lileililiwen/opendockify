@@ -43,8 +43,12 @@ public static class AutomationEndpoints
             HttpContext http,
             GenerateDocumentRequest request,
             AutomationService automation,
+            NotifyRateGate gate,
             CancellationToken ct) =>
         {
+            var rate = await gate.CheckRateAsync("preview", http, ct);
+            if (!rate.Allowed)
+                return NotifyRateGate.RateLimitedResult(rate);
             var result = await automation.PreviewAsync(
                 OwnerId(http),
                 new GenerateCommand(request.TemplateId, request.Values ?? [], request.SelectedClauseIds ?? []),
@@ -69,8 +73,18 @@ public static class AutomationEndpoints
         group.MapPost("/finalize", async (
             HttpContext http,
             AutomationService automation,
+            NotifyRateGate gate,
+            PlatformIdempotencyBridge bridge,
+            PlatformOutboxBridge outbox,
+            NotifyService notify,
             CancellationToken ct) =>
         {
+            var rate = await gate.CheckRateAsync("finalize", http, ct);
+            if (!rate.Allowed)
+                return NotifyRateGate.RateLimitedResult(rate);
+            var (quotaOk, quotaReject) = await gate.CheckDocumentQuotaAsync(http, ct);
+            if (!quotaOk)
+                return quotaReject!;
             var key = http.Request.Headers["Idempotency-Key"].ToString().Trim();
             if (key.Length == 0)
             {
@@ -114,14 +128,34 @@ public static class AutomationEndpoints
                     StatusCodes.Status400BadRequest);
             }
 
+            var digest = RequestDigests.Compute(Encoding.UTF8.GetBytes(rawBody));
+            var replay = await bridge.TryReplayAsync(TokenId(http), key, AutomationService.FinalizeRoute, digest, ct);
+            if (replay.Hit)
+            {
+                return Results.Content(replay.Body!, "application/json", Encoding.UTF8, replay.Status);
+            }
+
+            if (replay.Status == 409)
+            {
+                return ErrorContent("conflict_idempotency_key", "This idempotency key was already used with a different request body.", null, StatusCodes.Status409Conflict);
+            }
+
             var result = await automation.FinalizeAsync(
                 OwnerId(http),
                 TokenId(http),
                 key,
                 AutomationService.FinalizeRoute,
-                RequestDigests.Compute(Encoding.UTF8.GetBytes(rawBody)),
+                digest,
                 new GenerateCommand(request.TemplateId, request.Values ?? [], request.SelectedClauseIds ?? []),
                 ct);
+
+            await bridge.SaveAsync(TokenId(http), key, AutomationService.FinalizeRoute, digest, result.StatusCode, result.ResponseJson, ct);
+            if (result.StatusCode == 201)
+            {
+                await gate.ConsumeDocumentAsync(http, ct);
+                await outbox.PublishFinalizedAsync(Guid.NewGuid(), OwnerId(http), result.ResponseJson, http.TraceIdentifier, ct);
+                await notify.SendDocumentFinalizedAsync(OwnerId(http).ToString(), request.TemplateId.ToString(), result.DocumentId ?? Guid.Empty, ct);
+            }
 
             return Results.Content(result.ResponseJson, "application/json", Encoding.UTF8, result.StatusCode);
         })

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/legal/legal_text.dart';
 import '../../../core/config/connection_controller.dart';
@@ -45,6 +46,7 @@ class SettingsScreen extends ConsumerWidget {
             title: const Text('Change password'),
             onTap: () => context.push('/change-password'),
           ),
+          const NotificationPrefsTile(),
           ListTile(
             leading: const Icon(Icons.info_outline),
             title: const Text('About & Legal'),
@@ -87,6 +89,43 @@ class SettingsScreen extends ConsumerWidget {
         SizedBox(height: 8),
         Text('This is a document drafting tool only, not legal advice.'),
       ],
+    );
+  }
+}
+
+class NotificationPrefsTile extends ConsumerStatefulWidget {
+  const NotificationPrefsTile({super.key});
+
+  @override
+  ConsumerState<NotificationPrefsTile> createState() =>
+      _NotificationPrefsTileState();
+}
+
+class _NotificationPrefsTileState
+    extends ConsumerState<NotificationPrefsTile> {
+  static const _key = 'notify_prefs_enabled';
+  bool? _enabled;
+
+  @override
+  void initState() {
+    super.initState();
+    SharedPreferences.getInstance().then((prefs) {
+      if (mounted) setState(() => _enabled = prefs.getBool(_key) ?? false);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SwitchListTile(
+      secondary: const Icon(Icons.notifications_outlined),
+      title: const Text('Email notifications'),
+      subtitle: const Text('Share, expiry and finalize alerts'),
+      value: _enabled ?? false,
+      onChanged: (value) async {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool(_key, value);
+        if (mounted) setState(() => _enabled = value);
+      },
     );
   }
 }

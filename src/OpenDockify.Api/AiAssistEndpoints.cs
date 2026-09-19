@@ -22,9 +22,18 @@ public static class AiAssistEndpoints
             HttpContext http,
             PolishClauseRequest request,
             AiAssistService ai,
+            NotifyRateGate gate,
             CancellationToken ct) =>
         {
+            var rate = await gate.CheckRateAsync("ai-polish", http, ct);
+            if (!rate.Allowed)
+                return NotifyRateGate.RateLimitedResult(rate);
+            var (quotaOk, quotaReject) = await gate.CheckAiQuotaAsync(http, ct);
+            if (!quotaOk)
+                return quotaReject!;
             var result = await ai.PolishClauseAsync(CurrentUserId(http), request.TemplateId, request.Draft ?? string.Empty, ct);
+            if (result.Status == AiAssistStatus.Ok)
+                await gate.ConsumeAiAsync(http, ct);
             return ToResult(result);
         });
 
@@ -32,8 +41,15 @@ public static class AiAssistEndpoints
             HttpContext http,
             PolishDocumentRequest request,
             AiAssistService ai,
+            NotifyRateGate gate,
             CancellationToken ct) =>
         {
+            var rate = await gate.CheckRateAsync("ai-polish", http, ct);
+            if (!rate.Allowed)
+                return NotifyRateGate.RateLimitedResult(rate);
+            var (quotaOk, quotaReject) = await gate.CheckAiQuotaAsync(http, ct);
+            if (!quotaOk)
+                return quotaReject!;
             var result = await ai.PolishDocumentAsync(
                 CurrentUserId(http),
                 request.TemplateId,
@@ -41,6 +57,8 @@ public static class AiAssistEndpoints
                 request.Values ?? new Dictionary<string, string>(),
                 request.SelectedClauseIds ?? [],
                 ct);
+            if (result.Status == AiAssistStatus.Ok)
+                await gate.ConsumeAiAsync(http, ct);
             return ToResult(result);
         });
 

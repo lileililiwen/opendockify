@@ -23,6 +23,8 @@ public sealed class ExternalShareLinkConfiguration : IEntityTypeConfiguration<Ex
         builder.ToTable("ExternalShareLinks");
         builder.HasKey(x => x.Id);
         builder.Property(x => x.SecretHash).HasMaxLength(32).IsRequired();
+        builder.Property(x => x.PasswordHash).HasMaxLength(32);
+        builder.Property(x => x.PasswordSalt).HasMaxLength(16);
         builder.HasIndex(x => new { x.DocumentId, x.RevokedAt });
         builder.HasIndex(x => x.ExpiresAt);
         builder.HasIndex(x => x.OwnerId);

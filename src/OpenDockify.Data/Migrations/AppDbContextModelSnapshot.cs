@@ -927,6 +927,20 @@ namespace OpenDockify.Data.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("BLOB");
 
+                    b.Property<byte[]>("PasswordHash")
+                        .HasMaxLength(32)
+                        .HasColumnType("BLOB");
+
+                    b.Property<byte[]>("PasswordSalt")
+                        .HasMaxLength(16)
+                        .HasColumnType("BLOB");
+
+                    b.Property<int>("PasswordFailedAttempts")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset?>("PasswordLockedUntil")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ExpiresAt");

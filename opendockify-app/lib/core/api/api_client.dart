@@ -495,12 +495,17 @@ class ApiClient {
   Future<CreatedDocumentShareLink> createDocumentShareLink(
     String id,
     int lifetimeHours,
-    bool allowDownload,
-  ) async {
+    bool allowDownload, [
+    String? password,
+  ]) async {
     final data = await _guard(
       () => _dio.post(
         '/api/documents/$id/shares/links',
-        data: {'lifetimeHours': lifetimeHours, 'allowDownload': allowDownload},
+        data: {
+          'lifetimeHours': lifetimeHours,
+          'allowDownload': allowDownload,
+          if (password != null && password.isNotEmpty) 'password': password,
+        },
       ),
     );
     return CreatedDocumentShareLink.fromJson(_asMap(data));

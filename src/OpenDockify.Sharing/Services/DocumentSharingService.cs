@@ -99,7 +99,7 @@ public sealed class DocumentSharingService(DbContext db, ISystemConfigReader set
         return grants.Concat(links).OrderByDescending(x => x.CreatedAt).ToList();
     }
 
-    public async Task<(CreatedShareLink? Link, string? Error, bool NotFound)> CreateLinkAsync(Guid ownerId, Guid documentId, int lifetimeHours, bool allowDownload, CancellationToken ct)
+    public async Task<(CreatedShareLink? Link, string? Error, bool NotFound)> CreateLinkAsync(Guid ownerId, Guid documentId, int lifetimeHours, bool allowDownload, CancellationToken ct, string? password = null)
     {
         if (!await IsOwnerAsync(ownerId, documentId, ct))
             return (null, null, true);
@@ -110,8 +110,16 @@ public sealed class DocumentSharingService(DbContext db, ISystemConfigReader set
             max = 72;
         if (lifetimeHours < 1 || lifetimeHours > max)
             return (null, $"Lifetime must be between 1 and {max} hours.", false);
+        if (password is not null && (password.Length < 8 || password.Length > 128))
+            return (null, "Link password must be 8-128 characters.", false);
         var secret = RandomNumberGenerator.GetBytes(32);
         var entity = new ExternalShareLink { Id = Guid.NewGuid(), DocumentId = documentId, OwnerId = ownerId, SecretHash = Hash(secret), AllowDownload = allowDownload, ExpiresAt = DateTimeOffset.UtcNow.AddHours(lifetimeHours) };
+        if (password is not null)
+        {
+            var (hash, salt) = ShareLinkPasswordHelper.HashNew(password);
+            entity.PasswordHash = hash;
+            entity.PasswordSalt = salt;
+        }
         db.Set<ExternalShareLink>().Add(entity);
         db.Set<ShareAuditEvent>().Add(Audit(documentId, "link-created", "owner", ownerId, "authenticated", true));
         await db.SaveChangesAsync(ct);
@@ -131,7 +139,7 @@ public sealed class DocumentSharingService(DbContext db, ISystemConfigReader set
         return new(true, false, null);
     }
 
-    public async Task<PublicDocumentView?> ResolvePublicAsync(string token, bool download, string coarseClient, CancellationToken ct)
+    public async Task<PublicDocumentView?> ResolvePublicAsync(string token, bool download, string coarseClient, CancellationToken ct, string? password = null)
     {
         if (!await IsEnabledAsync(ct) || !TryParseToken(token, out var id, out var secret))
         { await DeniedAsync(null, coarseClient, ct); return null; }
@@ -141,6 +149,28 @@ public sealed class DocumentSharingService(DbContext db, ISystemConfigReader set
         if (!valid)
         { await DeniedAsync(link?.DocumentId, coarseClient, ct); return null; }
         var activeLink = link!;
+        if (activeLink.PasswordLockedUntil is not null && activeLink.PasswordLockedUntil > DateTimeOffset.UtcNow)
+        { await DeniedAsync(activeLink.DocumentId, coarseClient, ct); return null; }
+        if (activeLink.PasswordHash is not null)
+        {
+            if (string.IsNullOrEmpty(password) || activeLink.PasswordSalt is null
+                || !ShareLinkPasswordHelper.Verify(password, activeLink.PasswordHash, activeLink.PasswordSalt))
+            {
+                activeLink.PasswordFailedAttempts++;
+                if (activeLink.PasswordFailedAttempts >= 5)
+                {
+                    activeLink.PasswordLockedUntil = DateTimeOffset.UtcNow.AddMinutes(15);
+                    activeLink.PasswordFailedAttempts = 0;
+                }
+                await db.SaveChangesAsync(ct);
+                await DeniedAsync(activeLink.DocumentId, coarseClient, ct);
+                return null;
+            }
+
+            activeLink.PasswordFailedAttempts = 0;
+            activeLink.PasswordLockedUntil = null;
+            await db.SaveChangesAsync(ct);
+        }
         var view = await (from d in db.Set<Document>()
                           join t in db.Set<Template>() on d.TemplateId equals t.Id
                           where d.Id == activeLink.DocumentId
@@ -177,7 +207,14 @@ public sealed class DocumentSharingService(DbContext db, ISystemConfigReader set
     private async Task DeniedAsync(Guid? documentId, string client, CancellationToken ct) { db.Set<ShareAuditEvent>().Add(Audit(documentId, "public-denied", "external", null, client, false)); await db.SaveChangesAsync(ct); }
     private byte[] Hash(byte[] secret)
     {
-        return HMACSHA256.HashData(Encoding.UTF8.GetBytes(configuration["Sharing:HashKey"] ?? configuration["Jwt:Secret"] ?? "development-sharing-key"), secret);
+        // Sharing:HashKey is required (no JWT-secret fallback per notify-rate-quota).
+        var key = configuration["Sharing:HashKey"];
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            throw new InvalidOperationException("Sharing:HashKey is required. Set Sharing__HashKey to a secret distinct from Jwt:Secret.");
+        }
+
+        return HMACSHA256.HashData(Encoding.UTF8.GetBytes(key), secret);
     }
 
     private static string Base64Url(byte[] bytes)

@@ -10,4 +10,8 @@ public sealed class ExternalShareLink
     public DateTimeOffset ExpiresAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? RevokedAt { get; set; }
+    public byte[]? PasswordHash { get; set; }
+    public byte[]? PasswordSalt { get; set; }
+    public int PasswordFailedAttempts { get; set; }
+    public DateTimeOffset? PasswordLockedUntil { get; set; }
 }

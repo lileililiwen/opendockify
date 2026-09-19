@@ -39,10 +39,7 @@ public static class WebEdgeBootstrapValidator
 
         if (string.IsNullOrWhiteSpace(sharingHash))
         {
-            if (isProduction)
-            {
-                errors.Add("Sharing:HashKey is required in Production. Set Sharing__HashKey to a secret distinct from Jwt:Secret.");
-            }
+            errors.Add("Sharing:HashKey is required. Set Sharing__HashKey to a secret distinct from Jwt:Secret.");
         }
         else
         {

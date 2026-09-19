@@ -53,6 +53,18 @@
     <PackageReference Include="Platform.Jobs" Version="0.1.0" />
     <PackageReference Include="Platform.Jobs.Hangfire" Version="0.1.0" />
     <PackageReference Include="Platform.Observability" Version="0.1.0" />
+    <PackageReference Include="Platform.Mailing" Version="0.1.0" />
+    <PackageReference Include="Platform.Mailing.Smtp" Version="0.1.0" />
+    <PackageReference Include="Platform.Notifications" Version="0.1.0" />
+    <PackageReference Include="Platform.RateLimiting" Version="0.1.0" />
+    <PackageReference Include="Platform.Quota" Version="0.1.0" />
+    <PackageReference Include="Platform.Quota.AspNetCore" Version="0.1.0" />
+    <PackageReference Include="Platform.Idempotency" Version="0.1.0" />
+    <PackageReference Include="Platform.Eventing.Contracts" Version="0.1.0" />
+    <PackageReference Include="Platform.Eventing.EfCore" Version="0.1.0" />
+    <PackageReference Include="Platform.Webhooks.Contracts" Version="0.1.0" />
+    <PackageReference Include="Platform.Webhooks.AspNetCore" Version="0.1.0" />
+    <PackageReference Include="Platform.Webhooks.EfCore" Version="0.1.0" />
   </ItemGroup>
 
   <ItemGroup>

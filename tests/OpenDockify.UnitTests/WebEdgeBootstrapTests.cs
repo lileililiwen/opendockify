@@ -13,12 +13,27 @@ public sealed class WebEdgeBootstrapTests
             new Dictionary<string, string?>
             {
                 ["Jwt:Secret"] = "dev-secret-please-change-for-production-use",
+                ["Sharing:HashKey"] = "a-distinct-sharing-hash-with-at-least-thirty-two-bytes",
                 ["Ai:Endpoint"] = "https://llm.example/v1",
             });
 
         var errors = WebEdgeBootstrapValidator.Validate(configuration, "Development");
 
         Assert.Empty(errors);
+    }
+
+    [Fact]
+    public void Development_requires_sharing_hash_key()
+    {
+        var configuration = BuildConfiguration(
+            new Dictionary<string, string?>
+            {
+                ["Jwt:Secret"] = "dev-secret-please-change-for-production-use",
+            });
+
+        var errors = WebEdgeBootstrapValidator.Validate(configuration, "Development");
+
+        Assert.Contains(errors, e => e.Contains("Sharing:HashKey", StringComparison.Ordinal));
     }
 
     [Fact]

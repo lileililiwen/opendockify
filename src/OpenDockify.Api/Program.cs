@@ -26,10 +26,17 @@ using OpenDockify.Templates;
 using Platform.AspNetCore.DependencyInjection;
 using Platform.AspNetCore.Errors;
 using Platform.Auditing.AspNetCore.DependencyInjection;
+using Platform.Idempotency.DependencyInjection;
 using Platform.Identity.AspNetCore;
 using Platform.Jobs.Hangfire;
 using Platform.Jobs.Hangfire.DependencyInjection;
+using Platform.Mailing.DependencyInjection;
+using Platform.Mailing.Smtp.DependencyInjection;
+using Platform.Notifications.DependencyInjection;
 using Platform.Observability.DependencyInjection;
+using Platform.Quota.AspNetCore.DependencyInjection;
+using Platform.Quota.DependencyInjection;
+using Platform.RateLimiting.DependencyInjection;
 using Platform.Web;
 using Platform.Web.Cors;
 using Platform.Web.Cors.DependencyInjection;
@@ -41,6 +48,7 @@ using Platform.Web.Resilience.DependencyInjection;
 using Platform.Web.Telemetry;
 using Platform.Web.Versioning;
 using Platform.Web.Versioning.DependencyInjection;
+using Platform.Webhooks.AspNetCore.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -71,6 +79,8 @@ builder.Services.AddIntegrationsModule(builder.Configuration);
 builder.Services.AddAiAssistModule();
 builder.Services.AddEsignModule();
 builder.Services.AddStorageModule(builder.Configuration);
+builder.Services.AddNotifyModule(builder.Configuration);
+builder.Services.AddPlatformNotifyRateQuota(builder.Configuration);
 
 builder.Services.AddPlatformIdentityLifecycle();
 
@@ -291,12 +301,14 @@ app.UseRateLimiter();
 app.UsePlatformAuditing();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UsePlatformQuota();
 
 app.UsePlatformProblemDetails();
 
 app.MapAuthEndpoints();
 app.MapAdminEndpoints();
 app.MapAuditEndpoints();
+app.MapNotifyEndpoints();
 app.MapSystemConfigEndpoints();
 app.MapTemplateEndpoints();
 app.MapAdminTemplateEndpoints();
@@ -316,6 +328,7 @@ app.Services
     .RegisterOperationsRecurringJobs(builder.Configuration)
     .RegisterInterviewRecurringJobs()
     .RegisterIntegrationRecurringJobs()
+    .RegisterNotifyRecurringJobs()
     .RegisterDataRetentionRecurringJob();
 
 await app.Services.MigrateAndSeedAsync(app.Lifetime.ApplicationStopping);
