@@ -10,9 +10,22 @@ Future<bool> ensureAiConsent(BuildContext context) async {
   if (_warningShown) return true;
   final proceed = await showDialog<bool>(
     context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('AI privacy warning'),
-      content: SingleChildScrollView(child: Text(aiPrivacyWarning)),
+      builder: (context) => AlertDialog(
+        title: const Text('AI privacy warning'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Text(aiPrivacyWarning),
+              SizedBox(height: 8),
+              Text(
+                'PII scrub is enabled by default: ID numbers and phone numbers '
+                'are redacted before anything is sent. Prefer the local model.',
+              ),
+            ],
+          ),
+        ),
       actions: [
         TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
         FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Continue')),

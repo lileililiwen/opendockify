@@ -363,6 +363,47 @@ the proxy and the per-IP limits become useless.
 fails closed at startup; the AI client also re-checks before each call so a
 runtime-misconfigured endpoint cannot leak prompts in clear text.
 
+### AI providers, PII scrub, and token budgets
+
+Polish requests are routed through a policy gateway (`PlatformGatewayLlmClient`):
+
+- `Ai:Provider` selects the backend: `ollama` (default, local-first, no data
+  egress) or `openai-compatible` (any OpenAI-compatible chat-completions URL).
+  Unknown providers fail closed with a configuration error and no HTTP call.
+- `Ai:ScrubPii` (default `true`) redacts ID numbers, mobile numbers, and long
+  digit runs with placeholders **before** the prompt leaves the host. Mandatory
+  field values keep their `AiGuard` token round-trip; the scrubbed prompt is
+  never logged.
+- `Ai:MaxTokensPerDay` (default `20000`, `0` disables) enforces a per-user
+  per-day token budget (chars/4 estimate). Over-budget polish calls return
+  `429 quota_exceeded` with `Retry-After` and a `resetAt`, without calling any
+  provider. Successful responses carry `remainingTokens` for the app dialog.
+- Model output matching the legal-advice classifier appends a warning banner;
+  it never blocks (the drafting-tool disclaimer stays authoritative).
+- Usage logs keep at most 500 chars per snippet with `\d{6,}` redacted and
+  never contain endpoint keys.
+
+Run Ollama as a deployer-owned sidecar (not in `docker-compose.yml`):
+
+```bash
+docker run -d --name ollama -p 11434:11434 ollama/ollama
+# pull a model, then set Ai:Endpoint=http://localhost:11434 Ai:Model=<model>
+# (loopback default needs no Ai:AllowInsecureHttp flag)
+```
+
+### Render and LPR caching
+
+Identical template renders, LPR lookups, and identical polish requests are
+served from the single-host hybrid cache (Redis is not used):
+
+- Keys are SHA-256 hex of the normalized inputs under the `opendockify`
+  prefix — raw PII never appears in keys, tags, or logs (only a 16-char key
+  prefix plus hit/miss and char counts are logged).
+- TTLs: renders/polish 10 minutes (`Cache:RenderTtlMinutes`), LPR 24 hours
+  (`Cache:LprTtlHours`).
+- `POST /api/admin/cache/invalidate` (admin) clears by scope:
+  `{"scope":"lpr"|"renders"|"ai-polish"|"all"}`.
+
 ### Secret separation
 
 `Sharing:HashKey` (used to sign share links) must be a 32+ byte secret
@@ -380,4 +421,9 @@ in production.
 | `ForwardedHeaders:KnownProxies` | loopback only | Trusted proxy IPs that may set `X-Forwarded-For`. |
 | `ForwardedHeaders:KnownNetworks` | none | Trusted CIDR networks that may set `X-Forwarded-For`. |
 | `Ai:AllowInsecureHttp` | `false` | Permits `http://` loopback endpoints for local Ollama. |
+| `Ai:Provider` | `ollama` | `ollama` (local-first) or `openai-compatible`. |
+| `Ai:ScrubPii` | `true` | Redacts ID/phone/digit runs before any LLM call. |
+| `Ai:MaxTokensPerDay` | `20000` | Per-user per-day token budget (`0` disables). |
+| `Cache:RenderTtlMinutes` | `10` | TTL for cached renders and identical polish requests. |
+| `Cache:LprTtlHours` | `24` | TTL for the cached LPR rate. |
 | `Sharing:HashKey` | required in prod | 32+ byte secret distinct from `Jwt:Secret`. |

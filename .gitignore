@@ -13,6 +13,7 @@ obj/
 
 ## Environment / secrets
 appsettings.Production.json
+appsettings.Development.json
 .env
 *.pfx
 
@@ -37,3 +38,10 @@ src/OpenDockify.Api/data/
 
 ## Husky hooks runtime state (installed on restore; git-ignored)
 .husky/_/
+
+## Local AI sidecar data (deployer-owned Ollama models)
+.ollama/
+
+## Code intelligence indexes (generated, user-local)
+.ariadex/
+.codegraph/

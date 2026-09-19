@@ -163,6 +163,6 @@ public sealed class AiUsageLogRedactionTests
 
         var result = AiUsageLogService.RedactSensitive(input);
 
-        Assert.True(result.Length <= 2000);
+        Assert.True(result.Length <= 500);
     }
 }

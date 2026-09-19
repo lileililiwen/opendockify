@@ -1,13 +1,19 @@
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using OpenDockify.Auth.Services;
 using OpenDockify.Finance.Services;
 using OpenDockify.Generation.Models;
 using OpenDockify.Rendering.Services;
 using OpenDockify.Templates.Models;
 using OpenDockify.Templates.Services;
+using Platform.Caching.Contracts;
+using Platform.Caching.Keys;
 using Platform.Storage.Contracts;
 using Platform.Storage.Keys;
 
@@ -131,15 +137,23 @@ public sealed record DocumentSnapshot(
 /// upload to <see cref="IObjectStorage"/> → persist immutable record. Re-edit
 /// creates a new record with <see cref="Document.ParentId"/> set; the original
 /// never changes.
+///
+/// Identical successful renders are served from the platform cache (SHA-256
+/// of the normalized inputs under the app prefix, 10-minute default TTL, tag
+/// <c>renders</c>). The cache is optional — without a store every preview
+/// renders directly. Keys, tags, and logs never contain raw field values.
 /// </summary>
-public sealed class DocumentService(
+public sealed partial class DocumentService(
     DbContext db,
     TemplateService templateService,
     IPdfRenderer pdfRenderer,
     InterestRateService interestRateService,
     IDocumentReadAuthorizer readAuthorizer,
     IConfiguration configuration,
-    IObjectStorage objectStorage)
+    IObjectStorage objectStorage,
+    ICacheStore? cacheStore = null,
+    CacheKeyBuilder? cacheKeys = null,
+    ILogger<DocumentService>? logger = null)
 {
     private static readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -292,13 +306,18 @@ public sealed class DocumentService(
 
         await CollectInterestWarningsAsync(definition, command.Values, warnings, cancellationToken);
 
-        var render = TemplateRenderer.Render(definition, template.Body, command.Values, command.SelectedClauseIds);
-        if (render.Text is null)
+        var rendered = await RenderCachedAsync(
+            userId,
+            template,
+            definition,
+            command,
+            cancellationToken);
+        if (rendered is null)
         {
-            return DocumentPreviewResult.Failure(GenerationErrorKind.Validation, render.Error ?? "Rendering failed.");
+            return DocumentPreviewResult.Failure(GenerationErrorKind.Validation, "Rendering failed.");
         }
 
-        var fullText = AppendRiskNotice(render.Text, template.RiskNoticeText);
+        var fullText = AppendRiskNotice(rendered, template.RiskNoticeText);
         return new DocumentPreviewResult(fullText, template.Name, revisionId, warnings, GenerationErrorKind.None, null);
     }
 
@@ -553,6 +572,88 @@ public sealed class DocumentService(
         // Structured validation is shared with the automation API so both
         // surfaces enforce identical rules and messages.
         return [.. DocumentFieldValidation.Validate(definition, command).Select(error => error.Error)];
+    }
+
+    private async Task<string?> RenderCachedAsync(
+        Guid userId,
+        Template template,
+        TemplateDefinition definition,
+        GenerateCommand command,
+        CancellationToken cancellationToken)
+    {
+        if (cacheStore is null || cacheKeys is null)
+        {
+            return TemplateRenderer.Render(definition, template.Body, command.Values, command.SelectedClauseIds).Text;
+        }
+
+        var normalized = NormalizeRenderInputs(
+            userId,
+            template.Id,
+            template.DefinitionJson,
+            template.Body,
+            command.Values,
+            command.SelectedClauseIds);
+        var digest = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(normalized))).ToLowerInvariant();
+        var key = cacheKeys.ForApplication($"render:{digest}");
+        var read = await cacheStore.GetAsync<string>(key, cancellationToken);
+        if (read.Status == CacheReadStatus.Hit && read.Value is not null)
+        {
+            Log.RenderCacheHit(logger ?? NullLogger<DocumentService>.Instance, SafeKeyPrefix(key.Value), read.Value.Length);
+            return read.Value;
+        }
+
+        var render = TemplateRenderer.Render(definition, template.Body, command.Values, command.SelectedClauseIds);
+        if (render.Text is null)
+        {
+            return null;
+        }
+
+        var ttlMinutes = int.TryParse(configuration["Cache:RenderTtlMinutes"], out var minutes) && minutes > 0
+            ? minutes
+            : 10;
+        await cacheStore.SetAsync(
+            key,
+            render.Text,
+            new CacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(ttlMinutes), Tags = ["renders"] },
+            cancellationToken);
+        return render.Text;
+    }
+
+    private static string NormalizeRenderInputs(
+        Guid userId,
+        Guid templateId,
+        string definitionJson,
+        string body,
+        IReadOnlyDictionary<string, string> values,
+        IReadOnlyCollection<string> selectedClauseIds)
+    {
+        var sb = new StringBuilder();
+        sb.Append(userId.ToString("N")).Append('|');
+        sb.Append(templateId.ToString("N")).Append('|');
+        sb.Append(definitionJson).Append('|').Append(body).Append('|');
+        foreach (var pair in values.OrderBy(p => p.Key, StringComparer.Ordinal))
+        {
+            sb.Append(pair.Key).Append('=').Append(pair.Value).Append(';');
+        }
+
+        sb.Append('|');
+        foreach (var id in selectedClauseIds.OrderBy(id => id, StringComparer.Ordinal))
+        {
+            sb.Append(id).Append(',');
+        }
+
+        return sb.ToString();
+    }
+
+    private static string SafeKeyPrefix(string keyValue)
+    {
+        return keyValue.Length <= 16 ? keyValue : keyValue[..16];
+    }
+
+    private static partial class Log
+    {
+        [LoggerMessage(1, LogLevel.Debug, "Render cache hit key={KeyPrefix} chars={Chars}.")]
+        public static partial void RenderCacheHit(ILogger logger, string keyPrefix, int chars);
     }
 
     private async Task CollectInterestWarningsAsync(

@@ -35,6 +35,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Platform.Ai" Version="0.1.0" />
+    <PackageReference Include="Platform.Ai.Contracts" Version="0.1.0" />
+    <PackageReference Include="Platform.Ai.Ollama" Version="0.1.0" />
+    <PackageReference Include="Platform.Ai.OpenAiCompatible" Version="0.1.0" />
+    <PackageReference Include="Platform.Caching" Version="0.1.0" />
+    <PackageReference Include="Platform.Caching.Hybrid" Version="0.1.0" />
     <PackageReference Include="Platform.Identity.AspNetCore" Version="0.1.0" />
     <PackageReference Include="Platform.AspNetCore" Version="0.1.0" />
     <PackageReference Include="Platform.Web" Version="0.1.0" />

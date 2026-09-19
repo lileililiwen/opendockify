@@ -1,12 +1,17 @@
 class PolishResult {
-  const PolishResult({required this.text, required this.warning});
+  const PolishResult({required this.text, required this.warning, this.remainingTokens});
 
   final String text;
   final String warning;
 
+  /// Remaining per-day AI tokens for the user, when the server enforces
+  /// `Ai:MaxTokensPerDay`. Null when the budget is disabled.
+  final int? remainingTokens;
+
   factory PolishResult.fromJson(Map<String, dynamic> json) => PolishResult(
         text: json['text']?.toString() ?? '',
         warning: json['warning']?.toString() ?? '',
+        remainingTokens: json['remainingTokens'] is num ? (json['remainingTokens'] as num).toInt() : null,
       );
 }
 

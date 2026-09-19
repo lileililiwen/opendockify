@@ -21,6 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Platform.Caching" Version="0.1.0" />
     <PackageReference Include="Platform.Storage" Version="0.1.0" />
   </ItemGroup>
 

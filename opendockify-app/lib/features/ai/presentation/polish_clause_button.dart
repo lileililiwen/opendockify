@@ -62,7 +62,7 @@ class _PolishClauseButtonState extends ConsumerState<PolishClauseButton> {
       final PolishResult result = await ref.read(apiClientProvider).polishClause(request);
       if (!mounted) return;
       setState(() => _busy = false);
-      await _showResult(context, result.text, result.warning);
+      await _showResult(context, result.text, result.warning, result.remainingTokens);
     } on ApiError catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
@@ -75,13 +75,13 @@ class _PolishClauseButtonState extends ConsumerState<PolishClauseButton> {
       case ApiErrorKind.aiDisabled:
         return 'AI is disabled by the administrator.';
       case ApiErrorKind.rateLimited:
-        return 'Daily AI usage limit reached.';
+        return 'Daily AI usage or token budget reached.';
       default:
         return e.message.isEmpty ? 'AI polish failed. Please try again.' : e.message;
     }
   }
 
-  Future<void> _showResult(BuildContext context, String text, String warning) async {
+  Future<void> _showResult(BuildContext context, String text, String warning, int? remainingTokens) async {
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -92,6 +92,10 @@ class _PolishClauseButtonState extends ConsumerState<PolishClauseButton> {
             mainAxisSize: MainAxisSize.min,
             children: [
               if (warning.isNotEmpty) WarningBanner(message: warning),
+              if (remainingTokens != null) ...[
+                const SizedBox(height: 8),
+                Text('Remaining AI tokens today: $remainingTokens', style: Theme.of(dialogContext).textTheme.bodySmall),
+              ],
               const SizedBox(height: 8),
               SelectableText(text.isEmpty ? '(no text)' : text),
             ],

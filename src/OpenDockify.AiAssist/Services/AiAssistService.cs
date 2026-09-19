@@ -74,7 +74,8 @@ public sealed class AiAssistService(
         }
 
         var systemPrompt = PromptBuilder.BuildClauseSystemPrompt(definitionResult.Definition!);
-        var llm = await llmClient.CompleteAsync(systemPrompt, draft, cancellationToken);
+        var userContent = await MaybeScrubAsync(draft, cancellationToken);
+        var llm = await llmClient.CompleteAsync(systemPrompt, userContent, cancellationToken);
 
         if (!llm.Succeeded)
         {
@@ -85,7 +86,7 @@ public sealed class AiAssistService(
         var polished = AiGuard.StripFabricated(draft, llm.Content!);
         await usageLog.LogAsync(userId, "polish-clause", draft, polished, success: true, cancellationToken);
 
-        return AiAssistResult.Succeeded(polished, _sensitivityWarning);
+        return AiAssistResult.Succeeded(polished, WithLegalAdviceWarning(polished, _sensitivityWarning));
     }
 
     public async Task<AiAssistResult> PolishDocumentAsync(
@@ -123,7 +124,8 @@ public sealed class AiAssistService(
 
         var tokenized = AiGuard.TokenizeValues(renderedText, renderedValues);
         var systemPrompt = PromptBuilder.BuildDocumentSystemPrompt(definition);
-        var llm = await llmClient.CompleteAsync(systemPrompt, tokenized, cancellationToken);
+        var userContent = await MaybeScrubAsync(tokenized, cancellationToken);
+        var llm = await llmClient.CompleteAsync(systemPrompt, userContent, cancellationToken);
 
         if (!llm.Succeeded)
         {
@@ -147,7 +149,25 @@ public sealed class AiAssistService(
 
         await usageLog.LogAsync(userId, "polish-document", renderedText, polished, success: true, cancellationToken);
 
-        return AiAssistResult.Succeeded(polished, _sensitivityWarning);
+        return AiAssistResult.Succeeded(polished, WithLegalAdviceWarning(polished, _sensitivityWarning));
+    }
+
+    /// <summary>
+    /// Applies the pre-LLM PII scrub when <c>Ai.ScrubPii</c> is enabled
+    /// (default on). The scrubbed prompt is never logged — usage logs keep
+    /// only the redacted original snippet.
+    /// </summary>
+    private async Task<string> MaybeScrubAsync(string text, CancellationToken cancellationToken)
+    {
+        var scrub = await config.GetAsync<bool>(SettingKeys.AiScrubPii, cancellationToken);
+        return scrub ? AiPiiScrubber.Scrub(text) : text;
+    }
+
+    private static string WithLegalAdviceWarning(string polished, string baseWarning)
+    {
+        return AiLegalAdviceClassifier.LooksLikeLegalAdvice(polished)
+            ? $"{baseWarning} {AiLegalAdviceClassifier.LegalAdviceWarning}"
+            : baseWarning;
     }
 
     private async Task<bool> IsEnabledAsync(CancellationToken cancellationToken)

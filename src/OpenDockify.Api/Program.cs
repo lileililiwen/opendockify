@@ -81,6 +81,7 @@ builder.Services.AddEsignModule();
 builder.Services.AddStorageModule(builder.Configuration);
 builder.Services.AddNotifyModule(builder.Configuration);
 builder.Services.AddPlatformNotifyRateQuota(builder.Configuration);
+builder.Services.AddPlatformAiCaching();
 
 builder.Services.AddPlatformIdentityLifecycle();
 
@@ -317,6 +318,7 @@ app.MapSharingEndpoints();
 app.MapInterviewEndpoints();
 app.MapAiAssistEndpoints();
 app.MapAdminAiUsageEndpoints();
+app.MapAdminAiCacheEndpoints();
 app.MapOperationsEndpoints();
 app.MapAutomationEndpoints();
 app.MapIntegrationManagementEndpoints();

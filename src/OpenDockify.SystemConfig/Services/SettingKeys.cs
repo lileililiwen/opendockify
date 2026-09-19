@@ -40,6 +40,11 @@ public static class SettingKeys
     public const string AiModel = "Ai.Model";
     public const string AiTimeoutSeconds = "Ai.TimeoutSeconds";
     public const string AiRateLimitPerDay = "Ai.RateLimitPerDay";
+    public const string AiProvider = "Ai.Provider";
+    public const string AiScrubPii = "Ai.ScrubPii";
+    public const string AiMaxTokensPerDay = "Ai.MaxTokensPerDay";
+    public const string CacheRenderTtlMinutes = "Cache.RenderTtlMinutes";
+    public const string CacheLprTtlHours = "Cache.LprTtlHours";
     public const string LprOneYearRate = "Lpr.OneYearRate";
     public const string LprReferenceDate = "Lpr.ReferenceDate";
     public const string SharingEnabled = "Sharing.Enabled";
@@ -54,6 +59,11 @@ public static class SettingKeys
         new(AiModel, SettingValueType.Text, "\"\"", "AI_MODEL"),
         new(AiTimeoutSeconds, SettingValueType.Number, "30", "AI_TIMEOUT_SECONDS"),
         new(AiRateLimitPerDay, SettingValueType.Number, "0", "AI_RATE_LIMIT_PER_DAY"),
+        new(AiProvider, SettingValueType.Text, "\"ollama\"", "AI_PROVIDER"),
+        new(AiScrubPii, SettingValueType.Bool, "true", "AI_SCRUB_PII"),
+        new(AiMaxTokensPerDay, SettingValueType.Number, "20000", "AI_MAX_TOKENS_PER_DAY"),
+        new(CacheRenderTtlMinutes, SettingValueType.Number, "10", "CACHE_RENDER_TTL_MINUTES"),
+        new(CacheLprTtlHours, SettingValueType.Number, "24", "CACHE_LPR_TTL_HOURS"),
         new(LprOneYearRate, SettingValueType.Number, "3.45", "LPR_ONE_YEAR_RATE"),
         new(LprReferenceDate, SettingValueType.Date, null, "LPR_REFERENCE_DATE"),
         new(SharingEnabled, SettingValueType.Bool, "true", "SHARING_ENABLED"),
@@ -111,9 +121,16 @@ public static class SettingKeys
                     return false;
                 }
 
-                if (decimalValue < 0 || decimalValue > 100)
+                var maxValue = definition.Key switch
                 {
-                    error = "Value must be between 0 and 100.";
+                    AiMaxTokensPerDay => 10_000_000m,
+                    CacheRenderTtlMinutes => 1440m,
+                    CacheLprTtlHours => 168m,
+                    _ => 100m,
+                };
+                if (decimalValue < 0 || decimalValue > maxValue)
+                {
+                    error = $"Value must be between 0 and {maxValue.ToString(CultureInfo.InvariantCulture)}.";
                     return false;
                 }
 

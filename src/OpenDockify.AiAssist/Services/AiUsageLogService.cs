@@ -7,6 +7,7 @@ namespace OpenDockify.AiAssist.Services;
 /// <summary>
 /// Persists AI usage logs with PII-redacted snippets (18-digit ID numbers and
 /// long digit runs are masked before storage; raw values never persist).
+/// Snippets are truncated to 500 chars; endpoint keys are never logged.
 /// </summary>
 public sealed class AiUsageLogService(DbContext db)
 {
@@ -15,7 +16,7 @@ public sealed class AiUsageLogService(DbContext db)
         RegexOptions.Compiled,
         TimeSpan.FromSeconds(1));
 
-    private const int _maxSnippetLength = 2000;
+    private const int _maxSnippetLength = 500;
 
     public async Task LogAsync(
         Guid userId,
